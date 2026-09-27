@@ -133,8 +133,8 @@ def fig_f00():
     # transformer blocks
     for k in range(4):
         ax.add_patch(FancyBboxPatch((9.6 + k * 0.25, 2.2 + k * 0.18), 2.6, 2.6, boxstyle="round,pad=0.05", facecolor="#eafaf1", edgecolor="#1e8449", lw=1.5))
-    ax.text(11.3, 5.35, "2–4 transformer blocks\n6 heads, width 384", ha="center", fontsize=10.5, weight="bold")
-    ax.text(11.3, 3.75, "self-attention over 258 tokens\n(256 patches + 2 condition tokens)\nwith a learned relative-position bias\nper (Δrow, Δcol) between patches\n+ MLP", ha="center", fontsize=8.5)
+    ax.text(11.0, 5.75, "2–4 transformer blocks\n6 heads, width 384", ha="center", fontsize=10.5, weight="bold")
+    ax.text(11.65, 4.05, "self-attention over 258 tokens\n(256 patches + 2 condition tokens)\na learned relative-position bias\nper (Δrow, Δcol) between patches\n+ MLP", ha="center", fontsize=8.5)
     # head and output
     ax.add_patch(FancyBboxPatch((13.3, 2.9), 2.4, 1.6, boxstyle="round,pad=0.05", facecolor="#f4ecf7", edgecolor="#7d3c98", lw=1.5))
     ax.text(14.5, 4.12, "per-cell head", ha="center", fontsize=10, weight="bold"); ax.text(14.5, 3.5, "each patch token →\n4 × 4 output cells", ha="center", fontsize=9)
@@ -142,10 +142,10 @@ def fig_f00():
     path = [(2, 11), (3, 11), (4, 11), (5, 11), (5, 10), (5, 9), (5, 8), (6, 8), (7, 8), (8, 8), (9, 8), (9, 7), (9, 6), (9, 5), (9, 4), (10, 4), (11, 4)]
     for x, y in path: ax.add_patch(Rectangle((13.8 + x * 0.1, 0.55 + y * 0.1), 0.1, 0.1, facecolor=PRED_C, edgecolor="none"))
     for x, y in ((2, 11), (11, 4)): ax.add_patch(plt.Circle((13.85 + x * 0.1, 0.6 + y * 0.1), 0.09, facecolor="white", edgecolor="k", lw=0.8))
-    ax.text(14.5, 2.35, "output: 64 × 64 grid\n(4 m cells), one mask per task", ha="center", fontsize=9)
+    ax.text(14.5, 2.15, "output: 64 × 64 grid\n(4 m cells), one mask per task", ha="center", fontsize=9)
     ax.text(14.5, 0.25, "later: + output tokens (state, stop)", ha="center", fontsize=8, color="#666", style="italic")
     # arrows
-    for (x0, y0, x1, y1) in [(4.2, 3.7, 6.0, 3.7), (8.8, 3.7, 9.6, 3.7), (8.8, 1.3, 9.9, 2.3), (12.5, 3.7, 13.3, 3.7), (14.5, 2.9, 14.5, 2.55)]:
+    for (x0, y0, x1, y1) in [(4.2, 3.7, 6.0, 3.7), (8.8, 3.7, 9.6, 3.7), (8.8, 1.3, 9.9, 2.3), (12.5, 3.7, 13.3, 3.7), (14.5, 2.9, 14.5, 2.5)]:
         ax.add_patch(FancyArrowPatch((x0, y0), (x1, y1), arrowstyle="-|>", mutation_scale=18, lw=1.8, color="#333"))
     ax.text(8.0, 7.05, "A vision-in, vision-out model, conditioned by tokens, trained from scratch on real city data", ha="center", fontsize=12, weight="bold")
     ax.text(8.0, 6.6, "The question: what spatial reasoning can this kind of model learn from this kind of data, and what does it take?", ha="center", fontsize=10, color="#333")
