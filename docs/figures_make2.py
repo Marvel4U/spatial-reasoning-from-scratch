@@ -15,7 +15,7 @@ import torch, config
 LED = {r["id"]: r for r in json.load(open(REPO / "runs/experiments.json"))["runs"]}
 GREY = np.array([0, 85, 170, 255], dtype=np.uint8)
 plt.rcParams.update({"font.size": 10, "axes.titlesize": 11, "figure.dpi": 150, "font.family": "DejaVu Sans"})
-TARGET_C, PRED_C = "#f4d03f", "#ff2fd0"
+TARGET_C, PRED_C = "#1a3fd6", "#1a3fd6"
 
 
 def load_run(run, **extra):
@@ -68,7 +68,7 @@ def overlay_panel(ax, rgb, cells, color, markers, title=None, alpha=0.95):
         ax.add_patch(Rectangle((x * 4 - 0.5, y * 4 - 0.5), 4, 4, facecolor=color, edgecolor="none", alpha=alpha))
     for (x, y) in markers:
         ax.plot(x, y, "o", ms=13, mfc="white", mec="black", mew=2)
-    if title: ax.set_title(title)
+    if title: ax.set_title(title, fontsize=16, weight="bold", pad=10)
     ax.set_xticks([]); ax.set_yticks([])
 
 
@@ -98,15 +98,15 @@ def fig_f0():
     fig, axes = plt.subplots(len(picks), 3, figsize=(11, 3.7 * len(picks)))
     for r, (img, tgt, p, ratio) in enumerate(picks):
         rgb = rgb_from_img(img); mk = marker_xy(img)
-        overlay_panel(axes[r, 0], rgb, np.zeros((64, 64), bool), TARGET_C, mk, "input: map layers + two markers" if r == 0 else None)
-        overlay_panel(axes[r, 1], rgb, tgt > 0, TARGET_C, mk, "exact shortest path around buildings" if r == 0 else None)
-        overlay_panel(axes[r, 2], rgb, p > 0.5, PRED_C, mk, "model output (one forward pass)" if r == 0 else None)
+        overlay_panel(axes[r, 0], rgb, np.zeros((64, 64), bool), TARGET_C, mk, "INPUT" if r == 0 else None)
+        overlay_panel(axes[r, 1], rgb, tgt > 0, TARGET_C, mk, "TARGET" if r == 0 else None)
+        overlay_panel(axes[r, 2], rgb, p > 0.5, PRED_C, [], "MODEL OUTPUT" if r == 0 else None)
         axes[r, 0].set_ylabel(f"route {ratio:.2f}× the straight distance", fontsize=9)
     for c, col in enumerate((None, TARGET_C, PRED_C)):
         if col:
             for ax in axes[:, c]:
                 for s in ax.spines.values(): s.set_edgecolor(col); s.set_linewidth(4)
-    fig.suptitle("Shortest path around buildings between two points: exact target (yellow) and the 8.7 M-parameter model's output (magenta)", fontsize=12)
+    fig.suptitle("Shortest path around buildings between two markers (8.7 M-parameter model, one forward pass)", fontsize=13)
     fig.tight_layout(); fig.savefig(OUT / "F0_hero_detour.png"); plt.close(fig); print("F0 done")
 
 
@@ -225,9 +225,9 @@ def fig_f9():
         ax.text(0.0, 0.78, f"{r + 1}. {level}", fontsize=12, weight="bold", transform=ax.transAxes, va="center")
         ax.text(0.0, 0.48, task, fontsize=10, transform=ax.transAxes, va="center")
         ax.text(0.0, 0.14, metric, fontsize=10, transform=ax.transAxes, va="center", color="#1a5276", weight="bold")
-        overlay_panel(axes[r, 1], rgb, np.zeros_like(tgt), TARGET_C, mk, "input crop" if r == 0 else None)
-        overlay_panel(axes[r, 2], rgb, tgt, TARGET_C, mk, "exact target" if r == 0 else None, alpha=0.85)
-        overlay_panel(axes[r, 3], rgb, pred, PRED_C, mk, "model output" if r == 0 else None, alpha=0.85)
+        overlay_panel(axes[r, 1], rgb, np.zeros_like(tgt), TARGET_C, mk, "INPUT" if r == 0 else None)
+        overlay_panel(axes[r, 2], rgb, tgt, TARGET_C, mk, "TARGET" if r == 0 else None, alpha=0.85)
+        overlay_panel(axes[r, 3], rgb, pred, PRED_C, [], "MODEL OUTPUT" if r == 0 else None, alpha=0.85)
     fig.suptitle("Task levels, one validation example each, and the headline number (all models 4.8–8.7 M parameters, trained from scratch)", fontsize=12)
     fig.tight_layout(); fig.savefig(OUT / "F9_results_table.png"); plt.close(fig); print("F9 done")
 
