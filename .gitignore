@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+data
+data/
+runs/*
+!runs/experiments.json
+!runs/VIEWER_PANELS.md
+*.pt
