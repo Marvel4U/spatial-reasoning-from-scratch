@@ -7,7 +7,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 
-Encoding = Literal["scalar", "onehot", "onehot_v4"]
+Encoding = Literal["scalar", "onehot", "onehot_v4", "onehot_v4_sp"]
 LAYER_KEYS = ("noise_256", "surface_256", "estab_256")
 NUM_CLASSES_PER_LAYER = 4
 NUM_NOISE7_CLASSES = 7
@@ -115,6 +115,9 @@ def in_chans_for_encoding(encoding: Encoding) -> int:
         base = 3
     elif encoding == "onehot_v4":
         base = NUM_NOISE7_CLASSES + 2 * NUM_CLASSES_PER_LAYER
+    elif encoding == "onehot_v4_sp":
+        # C5_PLAN: onehot_v4 plus one scratchpad plane after the marker plane (channel 16)
+        return NUM_NOISE7_CLASSES + 2 * NUM_CLASSES_PER_LAYER + 2
     else:
         base = 12
     return base + 1  # marker slot (zero for c1/c2/c3 grid tasks)

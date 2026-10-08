@@ -22,13 +22,15 @@ def input_channel_names() -> list[str]:
         return ["noise", "surface", "estab", "marker"]
     from spatial_data.channels import NUM_CLASSES_PER_LAYER, NUM_NOISE7_CLASSES
     names: list[str] = []
-    if config.encoding_mode == "onehot_v4":
+    if config.encoding_mode in ("onehot_v4", "onehot_v4_sp"):
         for c in range(NUM_NOISE7_CLASSES):
             names.append(f"noise7_c{c}")
         for layer in ("surface", "estab"):
             for c in range(NUM_CLASSES_PER_LAYER):
                 names.append(f"{layer}_c{c}")
         names.append("marker")
+        if config.encoding_mode == "onehot_v4_sp":
+            names.append("scratchpad")
         return names
     for layer in ("noise", "surface", "estab"):
         for c in range(NUM_CLASSES_PER_LAYER):

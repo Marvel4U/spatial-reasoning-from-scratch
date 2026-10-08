@@ -58,6 +58,9 @@ RGB_LAYERS = ("noise", "surface", "estab")
 CROPSET_PLANES: dict[str, tuple[str, ...]] = {
     "v2": RGB_LAYERS, "v3": RGB_LAYERS, "v3b": RGB_LAYERS,
     "v4": RGB_LAYERS + ("noise7", "sun"),
+    # v4 without the sun plane, for districts built without elevation (zuid_centrum, 29 Sep 2026);
+    # the c4/c5 route tasks read noise7, surface and estab only
+    "v4ns": RGB_LAYERS + ("noise7",),
 }
 #: Number of classes per plane; drives the one-hot width and the bincounts.
 N_CLASSES = {"noise": 4, "surface": 4, "estab": 4, "noise7": 7, "sun": 8}

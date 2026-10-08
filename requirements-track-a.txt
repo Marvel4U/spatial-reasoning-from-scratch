@@ -1,0 +1,18 @@
+# Track A — Qwen3-VL inference + LoRA SFT, installed into the same environment as requirements.txt:
+#   source .venv/bin/activate
+#   uv pip install -r requirements-track-a.txt
+#
+# Do not pin torch here unless you intend to upgrade the environment; it already has torch+cu128.
+# Omit torch/torchvision if satisfied; uncomment or adjust after `python -c "import torch; print(torch.__version__)"`.
+# torch==2.14.0
+torchvision>=0.23.0
+transformers==5.16.1
+accelerate>=1.4.0
+peft>=0.15.0
+trl>=0.18.0
+bitsandbytes>=0.45.0
+huggingface-hub>=0.30.0
+safetensors>=0.5.0
+tokenizers>=0.21.0
+pillow>=11.0.0
+numpy>=2.0.0

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import config
-from experiment_sweeps import as_single, build_c0_worldsnap_p_sweep
+from experiment_sweeps import _patch_geometry, as_single, build_c0_worldsnap_p_sweep
 
 SCHEMA_VERSION = 1
 RESULTS_PATH = config.RESULTS_PATH
@@ -1036,7 +1036,7 @@ def c3_m1_food_drink_within_100m_smoke() -> dict:
 
 
 def c3_m1_food_drink_within_100m_8k() -> dict:
-    """N5 m1 portfolio run @ 8k."""
+    """N5 m1 reference run @ 8k."""
     from spatial_data.c3_tasks import M1_TASK_KEY, within_train_markers
 
     k, min_dist = within_train_markers(100)
@@ -1176,7 +1176,7 @@ def c3_m1_food_drink_within_100m_L4_8k_relV2() -> dict:
 
 
 def c3_n5_m1_mix_8k() -> dict:
-    """N5 portfolio: three-task mix + warm-start from m0 @ 100 m."""
+    """N5 reference: three-task mix + warm-start from m0 @ 100 m."""
     from spatial_data.c3_tasks import M1_TASK_KEY, N5_MIX_TASK_KEYS
 
     ckpt = config.REPO_ROOT / "runs" / "checkpoints" / "within_100m_rand1.pt"
@@ -1716,11 +1716,1507 @@ def c4_mix_probe_run_queue() -> list[dict]:
                        notes="N10 mix probe: all three at ⅓; the fourth cell of the 2x2", **base),
     ]
 
+
+# ---------------------------------------------------------------- C5 rung 0 / rung 1 (C5_PLAN §5: R0, R1)
+C5_N9_16CH_CKPT = config.REPO_ROOT / "runs" / "checkpoints" / "c4n_bld_det_L4_16k_store100k.pt"
+
+
+def _c5_warmstart_n9_if_fresh(spec: dict) -> dict:
+    """First launch only: 16→17ch expand from N9; resume uses this run's own checkpoints."""
+    rid = spec["id"]
+    ckpt_dir = config.harness_checkpoint_dir
+    has_run_ckpt = (ckpt_dir / f"{rid}.pt").is_file() or (
+        (ckpt_dir / rid).is_dir() and any((ckpt_dir / rid).glob("step*.pt"))
+    )
+    if not has_run_ckpt:
+        spec["init_checkpoint"] = str(C5_N9_16CH_CKPT)
+        spec["load_optimizer"] = False
+        spec["reset_step_counter"] = True
+    return spec
+
+
+def c5_r0_regression_17ch() -> dict:
+    """R0: the best one-shot detour recipe (N9: ½ building + ½ detour, 4 blocks, 100k store, 16k) with the
+    17-channel encoding (scratchpad plane, always empty here). Pass: detour dilated IoU within 0.02 of 0.81."""
+    spec = _c4_night_spec(run_id="c5_r0_bld_det_L4_16k_store100k_17ch", keys=["building", "detour"], weights=[0.5, 0.5],
+                          train_steps=16000, seed=4, enc_n_layer=4, c4_routes_subdir="c4_100k", encoding_mode="onehot_v4_sp",
+                          notes="C5 R0: N9 recipe with 17 input channels (empty scratchpad); regression against N9 (0.813 dilated)")
+    return spec
+
+
+def c5_r0a_grid128() -> dict:
+    """R0 variant A (resolution test, 29 Sep 2026): R0 with a 128x128 output (2 m cells), same 256 m window and input.
+    Compare with R0 (grid 64) on the metre-based metrics: dilated IoU and precision/recall use a 4 m tolerance at both sizes."""
+    spec = c5_r0_regression_17ch()
+    spec["id"] = "c5_r0a_bld_det_L4_16k_store100k_17ch_g128"
+    spec["overrides"]["grid_out_size"] = 128
+    spec["notes"] = "C5 R0 variant A: R0 with 128x128 output (2 m cells); resolution test against R0 at 64x64"
+    return spec
+
+
+def c5_r0b_window512() -> dict:
+    """R0 variant B (resolution test, 29 Sep 2026): R0 on 512 m windows (512 px input at 1 m, 128x128 output =
+    4 m cells as in R0, 1024 patch tokens at P=16), on the new Zuid + Centrum map (cropset v4ns: v4 without sun),
+    store c4_512_20k (routes 40-500 m straight, new 4x4 split with 1.2 km blocks). Compare with R0 / variant A on
+    the 40-250 m length bins; R0 and A are also evaluated on this map's held-out ground (256 m val store c4_256_val)."""
+    spec = c5_r0_regression_17ch()
+    spec["id"] = "c5_r0b_bld_det_L4_16k_zc512_17ch"
+    ov = spec["overrides"]
+    ov.update(img_size=512, grid_out_size=128, district_name="zuid_centrum", cropset="v4ns",
+              c4_routes_subdir="c4_512_20k", diagnostics_pred_c4_reference_subdir=None,
+              batch_size=64)   # batch 128 does not fit in 12 GB at 1024 tokens
+    # first a short run (Marvin, 29 Sep): time, progress, problems; 8k x 64 = R0's samples at its step 4000.
+    # The full-length run is 32k steps (= R0's 16k x 128 samples).
+    spec["train_steps"] = 8000
+    spec["lr_horizon_steps"] = 8000
+    spec["id"] = "c5_r0b_bld_det_L4_8k_b64_zc512_17ch"
+    spec["notes"] = "C5 R0 variant B: 512 m windows, 128x128 output (4 m cells), Zuid + Centrum map, routes 40-500 m"
+    return spec
+
+
+def c5_rerun_queue() -> list[dict]:
+    """Reruns after the 29 Sep task changes (C5_PLAN §6), De Pijp 100k store, 2 blocks, 8k each (~15-20 min each):
+    R1 with grazing rays only, at 64x64 and at 128x128 output (does the finer grid help the rays?);
+    R2 and R3 with the token as the only target of length samples (mask cells ignored) - watch iou_segment."""
+    r1 = c5_r1_rays_segment_mix()
+    r1["id"] = "c5_r1b_seg_rays_grazing_L2_8k_store100k"
+    r1["notes"] = "C5 R1b: as R1 with grazing rays only (fans rebuilt 29 Sep)"
+    r1g = c5_r1_rays_segment_mix()
+    r1g["id"] = "c5_r1b_seg_rays_grazing_L2_8k_store100k_g128"
+    r1g["overrides"]["grid_out_size"] = 128
+    r1g["notes"] = "C5 R1b at 128x128 output (2 m cells): resolution test A on the rays"
+    r2 = c5_r2_length_line()
+    r2["id"] = "c5_r2b_seg_lenline_tokonly_L2_8k_store100k"
+    r2["notes"] = "C5 R2b: length_line trains the token only (no mask target); segment IoU must stay ~0.8"
+    r3 = c5_r3_length_path()
+    r3["id"] = "c5_r3b_seg_lenline_lenpath_tokonly_L2_8k_store100k"
+    r3["notes"] = "C5 R3b: length_line + length_path, token only; segment IoU must stay ~0.8"
+    return [r1, r1g, r2, r3]
+
+
+def c5_traj_queue() -> list[dict]:
+    """C5 rung 1, second definition (30 Sep 2026): key trajectories within 100 m walking from both markers, as the
+    only task (no segment mix), 2 blocks, 8k, De Pijp 100k store; at 64x64 and at 128x128 output."""
+    out = []
+    for g in (64, 128):
+        spec = _c4_night_spec(run_id="c5_r1c_traj_L2_8k_store100k" + ("" if g == 64 else "_g128"), keys=["trajectories"],
+                              weights=[1.0], train_steps=8000, seed=4, c4_routes_subdir="c4_100k", encoding_mode="onehot_v4_sp",
+                              notes=f"C5 R1c: key trajectories only, {g}x{g} output, 17ch, 2 blocks, 8k")
+        spec["overrides"]["c4_eval_task_key"] = "trajectories"
+        if g != 64:
+            spec["overrides"]["grid_out_size"] = g
+        out.append(spec)
+    return out
+
+
+def c5_traj_one() -> dict:
+    """Key trajectories from ONE marker (marker 0 drawn, target = its trajectories only), 2 blocks, 8k, De Pijp, 64x64."""
+    spec = _c4_night_spec(run_id="c5_r1d_traj_one_L2_8k_store100k", keys=["trajectories_one"], weights=[1.0], train_steps=8000,
+                          seed=4, c4_routes_subdir="c4_100k", encoding_mode="onehot_v4_sp",
+                          notes="C5 R1d: key trajectories from one marker only, 64x64, 17ch, 2 blocks, 8k")
+    spec["overrides"]["c4_eval_task_key"] = "trajectories_one"
+    return spec
+
+
+def c5_r1d_traj_one_L2_16k_continue() -> dict:
+    """Resume the finished 8k R1d run to 16k (same run id — harness auto-resumes from step 7999)."""
+    spec = c5_traj_one()
+    spec["train_steps"] = 16000
+    spec["lr_horizon_steps"] = 16000
+    spec["notes"] = "C5 R1d: continue L2 g64 8k→16k; val loss still falling at 7999 (dilated IoU ~0.55)"
+    return spec
+
+
+def c5_r1d_traj_one_L4_16k() -> dict:
+    """One-marker trajectories, 4 encoder blocks, 16k, g64 (capacity ablation vs R1d L2)."""
+    spec = _c4_night_spec(
+        run_id="c5_r1d_traj_one_L4_16k_store100k", keys=["trajectories_one"], weights=[1.0], train_steps=16000,
+        seed=4, enc_n_layer=4, c4_routes_subdir="c4_100k", encoding_mode="onehot_v4_sp",
+        notes="C5 R1d L4: one-marker trajectories, 64x64 output, 4 blocks, 16k",
+    )
+    spec["overrides"]["c4_eval_task_key"] = "trajectories_one"
+    return spec
+
+
+def c5_r1d_traj_one_L2_g128() -> dict:
+    """One-marker trajectories at 128x128 output (2 m cells), 8k — resolution ablation vs R1d L2 g64."""
+    spec = c5_traj_one()
+    spec["id"] = "c5_r1d_traj_one_L2_8k_store100k_g128"
+    spec["overrides"]["grid_out_size"] = 128
+    spec["notes"] = "C5 R1d L2 g128: one-marker trajectories, 128x128 output, 2 blocks, 8k"
+    return spec
+
+
+def c5_r1d_traj_one_L4_g128() -> dict:
+    """One-marker trajectories, L4 + 128x128 output, 16k."""
+    spec = _c4_night_spec(
+        run_id="c5_r1d_traj_one_L4_16k_store100k_g128", keys=["trajectories_one"], weights=[1.0], train_steps=16000,
+        seed=4, enc_n_layer=4, c4_routes_subdir="c4_100k", encoding_mode="onehot_v4_sp",
+        notes="C5 R1d L4 g128: one-marker trajectories, 128x128 output, 4 blocks, 16k",
+    )
+    spec["overrides"].update(c4_eval_task_key="trajectories_one", grid_out_size=128)
+    return spec
+
+
+def c5_r1d_traj_one_run_queue() -> list[dict]:
+    """R1d sweeps after the first 8k L2 g64 run (~20–35 min each on 3060 except L4 16k ~40 min)."""
+    return [
+        c5_r1d_traj_one_L2_16k_continue(),
+        c5_r1d_traj_one_L4_16k(),
+        c5_r1d_traj_one_L2_g128(),
+        c5_r1d_traj_one_L4_g128(),
+    ]
+
+
+def c5_traj_zc512() -> dict:
+    """Key trajectories on the new map (Zuid + Centrum), 512 m windows, 128x128 output (4 m cells), batch 64 x 16k steps
+    (= the samples of the 8k x 128 De Pijp runs). Needs c5_traj_train.npz in c4_512_20k (built 30 Sep night)."""
+    spec = _c4_night_spec(run_id="c5_r1c_traj_L2_16k_b64_zc512", keys=["trajectories"], weights=[1.0], train_steps=16000,
+                          seed=4, c4_routes_subdir="c4_512_20k", encoding_mode="onehot_v4_sp",
+                          notes="C5 R1c on the new map: key trajectories only, 512 m windows, 128x128 output, batch 64, 16k")
+    spec["overrides"].update(c4_eval_task_key="trajectories", img_size=512, grid_out_size=128, district_name="zuid_centrum",
+                             cropset="v4ns", diagnostics_pred_c4_reference_subdir=None, batch_size=64)
+    return spec
+
+
+def c5_overnight_30sep_queue() -> list[dict]:
+    """Night 30 Sep -> 1 Oct, in the order their data is ready (~4-5 h): trajectories on De Pijp at 64 and 128 (~20 min
+    each), R0 variant B on the new map (512 m, 8k x 64, ~90 min), trajectories on the new map at 512 m (~1.5-2.5 h, 2 blocks at 1024 tokens).
+    The 512 m runs need PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True in the environment."""
+    traj64, traj128 = c5_traj_queue()
+    return [traj64, c5_traj_one(), traj128, c5_r0b_window512(), c5_traj_zc512()]
+
+
+def c5_traj_r40_queue(enc_n_layer: int = 2, train_steps: int = 8000) -> list[dict]:
+    """Key trajectories at a 40 m horizon, one marker, four steps (1 Oct 2026): step 1 marker -> round 1; steps 2-4
+    marker + earlier rounds on the scratchpad -> that round. Each a task of its own (no mix), De Pijp store, first
+    40k routes (the 40 m file covers those), 64x64 output."""
+    out = []
+    for key, tag in (("trajectories_one_r40", "step1"), ("trajectories_step2_r40", "step2"),
+                     ("trajectories_step3_r40", "step3"), ("trajectories_step4_r40", "step4")):
+        spec = _c4_night_spec(run_id=f"c5_r1e_traj40_{tag}_L{enc_n_layer}_{train_steps // 1000}k_store40k", keys=[key], weights=[1.0],
+                              train_steps=train_steps, seed=4, enc_n_layer=enc_n_layer, c4_routes_subdir="c4_100k",
+                              encoding_mode="onehot_v4_sp", worldsnap_max_train_items=40000,
+                              notes=f"C5 R1e: 40 m key trajectories, {tag} (one marker), 17ch, {enc_n_layer} blocks, {train_steps // 1000}k, first 40k routes")
+        spec["overrides"]["c4_eval_task_key"] = key
+        out.append(spec)
+    return out
+
+
+def c5_wave_queue(enc_n_layer: int = 2, train_steps: int = 8000, grid: int = 128) -> list[dict]:
+    """C5 R5 (1 Oct 2026, C5_PLAN §7): the four step types of the wave search, each alone, De Pijp first 40k routes,
+    128x128 output (2 m cells), fronts every 40 m, state token in slot 0, token head with 40 classes.
+    wave_first: start -> first front; wave_step: random middle pass; wave_reach: the pass reaching the goal (token
+    BUILD_PATH); wave_path: fronts -> the way back (token DONE)."""
+    out = []
+    for key in ("wave_first", "wave_step", "wave_reach", "wave_back", "wave_origin", "wave_draw"):
+        spec = _c4_night_spec(run_id=f"c5_r5_{key}_L{enc_n_layer}_{train_steps // 1000}k_g{grid}_store40k", keys=[key], weights=[1.0],
+                              train_steps=train_steps, seed=4, enc_n_layer=enc_n_layer, c4_routes_subdir="c4_100k",
+                              encoding_mode="onehot_v4_sp", worldsnap_max_train_items=40000, grid_out_size=grid,
+                              c5_token_targets=True, c5_token_head_enabled=True, c5_n_token_classes=41,
+                              notes=f"C5 R5 {key}: wave search step type alone, {enc_n_layer} blocks, {train_steps // 1000}k, {grid}x{grid}, first 40k routes")
+        spec["overrides"]["c4_eval_task_key"] = key
+        out.append(spec)
+    return out
+
+
+def c5_wave_back_counter_queue(key: str = "wave_back", enc_n_layer: int = 2, train_steps: int = 8000) -> list[dict]:
+    """Counter test (2 Oct 2026): which ingredient of the CE + noise recipe makes the backward hop a blob?
+    Reference (exists): c5_r5_wave_back_L2_8k_g128_store40k = this task alone, CE + Dice, no pad noise
+    (new-cell recall 0.68, 12.5 false cells per sample, 95 % of the consumed front erased).
+    Each run differs from the reference only in the named ingredient(s); same store (first 40k), seed, steps, lr.
+      A  dice_noisep1   CE + Dice, pad noise on           -> the noise alone
+      B  ce_nonoise     CE recipe (beta 0), no pad noise  -> dropping Dice alone (the lit-cell weight ~7.5 comes with it)
+      C  ce_noisep1     CE recipe (beta 0), pad noise on  -> the failing recipe without the mix
+    Read with harness/diagnostics/wave_back_ties.py RUN_ID (threshold sweep, false cells by cause)."""
+    def base(tag: str, what: str) -> dict:
+        spec = next(sp for sp in c5_wave_queue(enc_n_layer, train_steps) if sp["overrides"]["c4_eval_task_key"] == key)
+        spec["id"] = f"c5_r5_{key}_{tag}_L{enc_n_layer}_{train_steps // 1000}k_g128_store40k"
+        spec["notes"] = f"C5 R5 counter test, {key} alone, L{enc_n_layer} {train_steps // 1000}k, first 40k routes: {what}"
+        spec["overrides"]["diagnostics_wave_rollout_start_pass"] = "first_back"
+        return spec
+
+    ce = {**_c5_wave_beta_overrides(beta=0.0), "c5_wave_change_ce_beta_schedule": ""}
+    a = base("dice_noisep1", "CE + Dice, pad noise p1")
+    a["overrides"]["c5_wave_pad_noise"] = dict(_C5_WAVE_FWD3_PAD_NOISE)
+    b = base("ce_nonoise", "CE recipe beta 0, no pad noise")
+    b["overrides"].update(ce)
+    c = base("ce_noisep1", "CE recipe beta 0, pad noise p1")
+    c["overrides"].update(ce); c["overrides"]["c5_wave_pad_noise"] = dict(_C5_WAVE_FWD3_PAD_NOISE)
+    return [a, b, c]
+
+
+def c5_wave_back_counter_queue2(enc_n_layer: int = 2, train_steps: int = 8000) -> list[dict]:
+    """Counter test, round 2 (2 Oct 2026). Round 1: neither the pad noise nor dropping Dice reproduces the blob of the
+    bwd2 runs on wave_back alone (C = CE + noise: 68 false cells per sample against 167-259). What C does not have and
+    the bwd2 runs do: the mix with wave_origin (60/40) and the flat lr. One factor each, then both:
+      ref  wave_back alone, CE + Dice, no noise, cosine   -> the reference again on today's code
+      D    C + flat lr                                    -> the flat lr alone
+      E    C + mix back/origin 60/40 (cosine)             -> the mix alone
+      F    C + mix + flat lr                              -> the bwd2 plain recipe at L2 / 8k / first 40k (should fail)
+    C = c5_r5_wave_back_ce_noisep1_L2_8k_g128_store40k (CE recipe beta 0, pad noise p1, cosine over the run)."""
+    tag = f"L{enc_n_layer}_{train_steps // 1000}k_g128_store40k"
+    ce_noise = {**_c5_wave_beta_overrides(beta=0.0), "c5_wave_change_ce_beta_schedule": "",
+                "c5_wave_pad_noise": dict(_C5_WAVE_FWD3_PAD_NOISE)}
+
+    def spec_for(run_id: str, keys: list[str], weights: list[float], what: str) -> dict:
+        spec = _c4_night_spec(run_id=run_id, keys=keys, weights=weights, train_steps=train_steps, seed=4,
+                              enc_n_layer=enc_n_layer, c4_routes_subdir="c4_100k", encoding_mode="onehot_v4_sp",
+                              worldsnap_max_train_items=40000, grid_out_size=128, c5_token_targets=True,
+                              c5_token_head_enabled=True, c5_n_token_classes=41,
+                              notes=f"C5 R5 counter test 2, L{enc_n_layer} {train_steps // 1000}k, first 40k routes: {what}")
+        spec["overrides"]["c4_eval_task_key"] = "wave_back"
+        spec["overrides"]["diagnostics_wave_rollout_start_pass"] = "first_back"
+        return spec
+
+    ref = spec_for(f"c5_r5_wave_back_ref_rerun_{tag}", ["wave_back"], [1.0], "reference again: wave_back alone, CE + Dice, no noise, cosine")
+    d = spec_for(f"c5_r5_wave_back_ce_noisep1_lrflat_{tag}", ["wave_back"], [1.0], "wave_back alone, CE beta 0 + noise p1, flat lr")
+    d["overrides"].update(ce_noise); d["lr_horizon_steps"] = _M1_REPORT_LR_FLAT_HORIZON
+    e = spec_for(f"c5_r5_wave_bwd2_ce_noisep1_cosine_{tag}", ["wave_back", "wave_origin"], [0.6, 0.4], "back/origin 60/40, CE beta 0 + noise p1, cosine")
+    e["overrides"].update(ce_noise)
+    f = spec_for(f"c5_r5_wave_bwd2_ce_noisep1_lrflat_{tag}", ["wave_back", "wave_origin"], [0.6, 0.4], "back/origin 60/40, CE beta 0 + noise p1, flat lr")
+    f["overrides"].update(ce_noise); f["lr_horizon_steps"] = _M1_REPORT_LR_FLAT_HORIZON
+    return [ref, d, e, f]
+
+
+def c5_wave_back_counter_queue3(enc_n_layer: int = 2, train_steps: int = 8000) -> list[dict]:
+    """Counter test, round 3 (2 Oct 2026). Round 2: the mix with wave_origin is what breaks wave_back (E: 180 false
+    cells per sample against 68 alone; flat lr adds little; the loaders emit identical wave_back samples; the damage is
+    the same for every number of fronts on the pad). What the mix has and a single task has not: the output token is no
+    longer constant (BACK vs DRAW), so the token loss is a real classification through the shared trunk. In E the
+    train loss ends at 0.128 against a grid loss of 0.036; in C (token constant) it ends at 0.022.
+      G0  E with token loss weight 0     -> does the grid recover to the single-task level without the token loss?
+      G1  E with token loss weight 0.1   -> the practical setting, if G0 recovers
+    E = c5_r5_wave_bwd2_ce_noisep1_cosine_L2_8k_g128_store40k (back/origin 60/40, CE beta 0, noise p1, cosine)."""
+    out = []
+    for tag, w in (("tok0", 0.0), ("tok01", 0.1)):
+        spec = next(sp for sp in c5_wave_back_counter_queue2(enc_n_layer, train_steps) if "bwd2_ce_noisep1_cosine" in sp["id"])
+        spec["id"] = spec["id"].replace("bwd2_ce_noisep1_cosine", f"bwd2_ce_noisep1_cosine_{tag}")
+        spec["notes"] = spec["notes"] + f", token loss weight {w:g}"
+        spec["overrides"]["c5_token_loss_weight"] = w
+        out.append(spec)
+    return out
+
+
+def c5_wave_mix(enc_n_layer: int = 4, train_steps: int = 16000, grid: int = 128) -> dict:
+    """C5 R5: all six wave step types in one network (equal shares), tokens included."""
+    keys = ["wave_first", "wave_step", "wave_reach", "wave_back", "wave_origin", "wave_draw"]
+    spec = _c4_night_spec(run_id=f"c5_r5_wave_mix6_L{enc_n_layer}_{train_steps // 1000}k_g{grid}_store40k", keys=keys,
+                          weights=[1 / 6] * 6, train_steps=train_steps, seed=4, enc_n_layer=enc_n_layer, c4_routes_subdir="c4_100k",
+                          encoding_mode="onehot_v4_sp", worldsnap_max_train_items=40000, grid_out_size=grid,
+                          c5_token_targets=True, c5_token_head_enabled=True, c5_n_token_classes=41,
+                          notes=f"C5 R5 mix6: forward + backward wave passes, {enc_n_layer} blocks, {train_steps // 1000}k, {grid}x{grid}")
+    spec["overrides"]["c4_eval_task_key"] = "wave_back"
+    return spec
+
+
+def _c5_wave_change_ce_overrides(**extra: Any) -> dict[str, Any]:
+    """Plain CE + four-group scratchpad weighting (memo CHANGE_WEIGHTED_LOSS_2026-10-02)."""
+    return {
+        "c4_grid_loss": "ce",
+        "c5_wave_change_group_ce": True,
+        "c5_wave_change_ce_beta": 0.0,
+        "c5_wave_change_pad_px": 0,
+        **extra,
+    }
+
+
+def _c5_wave_long_run_compile_overrides(**extra: Any) -> dict[str, Any]:
+    """CUDA compile defaults for C5 wave runs ≥ auto-compile threshold (probe B aligned in harness)."""
+    return {"use_compile_dynamic": None, **extra}
+
+
+_C5_FWD3_KEYS = ["wave_first", "wave_step", "wave_reach"]
+_C5_FWD3_W_STEP50 = [0.25, 0.5, 0.25]  # emphasize wave_step in training mix
+_C5_WAVE_FWD3_PAD_NOISE = {"p": 0.5, "thicken": 0.5, "shift": 0.5, "drop": 0.05, "add": 0.002}
+_C5_WAVE_FWD3_NOISE_PROFILE_P1 = "p1"  # pad-noise recipe above; future profiles → p2, …
+_C5_WAVE_TRAIN_ITEMS = 100_000  # full c5_wave_train.npz on c4_100k (Oct 2026; was 40k cap)
+_C5_WAVE_STORE_TAG = "store100k"
+
+
+def _c5_wave_fwd3_banneal_run_id(
+    *,
+    beta_high: float,
+    enc_n_layer: int,
+    grid: int,
+    patch_size: int = 16,
+    noise_profile: str | None = None,
+) -> str:
+    btag = int(beta_high) if beta_high == int(beta_high) else beta_high
+    tag = f"banneal{btag}" + (f"_noise{noise_profile}" if noise_profile else "")
+    mid = f"L{enc_n_layer}"
+    if patch_size != 16:
+        mid = f"{mid}_p{patch_size}"
+    return f"c5_r5_wave_fwd3_{tag}_{mid}_g{grid}_{_C5_WAVE_STORE_TAG}"
+
+
+def _c5_wave_fwd3_flat_spec(
+    *,
+    run_id: str,
+    train_steps: int,
+    notes: str,
+    enc_n_layer: int = 4,
+    grid: int = 128,
+    patch_size: int = 16,
+    force_restart: bool = False,
+    extra_overrides: dict[str, Any] | None = None,
+) -> dict:
+    """Fwd3 mix, flat LR, step-less run id (resume by extending ``train_steps`` on same id)."""
+    spec = _c5_wave_mix_ablation(
+        run_id=run_id,
+        keys=_C5_FWD3_KEYS,
+        weights=_C5_FWD3_W_STEP50,
+        train_steps=train_steps,
+        eval_key="wave_step",
+        notes=notes,
+        enc_n_layer=enc_n_layer,
+        grid=grid,
+        patch_size=patch_size,
+    )
+    spec["lr_horizon_steps"] = _M1_REPORT_LR_FLAT_HORIZON
+    spec["force_restart"] = force_restart
+    ov: dict[str, Any] = {
+        "t_train": train_steps,
+        **_c5_wave_long_run_compile_overrides(),
+        "c4_grid_loss": "ce",  # wave beta path; ablation inherits c4b ce_dice from _c4_learning_recipe
+        "c5_wave_eval_decision_rule": True,
+    }
+    if extra_overrides:
+        ov.update(extra_overrides)
+    spec["overrides"] = {**spec["overrides"], **ov}
+    return spec
+
+
+def c5_wave_fwd3_plain(train_steps: int = 16000, grid: int = 128) -> dict:
+    """Plain CE fwd3 (β=0), flat lr, 50% wave_step mix."""
+    return _c5_wave_fwd3_flat_spec(
+        run_id=f"c5_r5_wave_fwd3_plain_L4_g{grid}_{_C5_WAVE_STORE_TAG}",
+        train_steps=train_steps,
+        notes=f"C5 fwd3 plain CE, step mix 50%, flat lr, L4 target {train_steps} steps",
+        extra_overrides={
+            "c5_wave_change_group_ce": False,
+            "c5_wave_change_ce_beta": 0.0,
+            "c5_wave_change_ce_beta_schedule": "",
+        },
+    )
+
+
+def c5_wave_fwd3_plain_noisep1(train_steps: int = 16000, grid: int = 128) -> dict:
+    """Plain CE (β=0) + pad noise profile p1; isolates anneal vs static β under noise."""
+    return _c5_wave_fwd3_flat_spec(
+        run_id=f"c5_r5_wave_fwd3_plain_noisep1_L4_g{grid}_{_C5_WAVE_STORE_TAG}",
+        train_steps=train_steps,
+        notes=f"C5 fwd3 plain CE β=0, noisep1, step mix 50%, flat lr, L4, {train_steps} steps",
+        extra_overrides={
+            "c5_wave_change_group_ce": False,
+            "c5_wave_change_ce_beta": 0.0,
+            "c5_wave_change_ce_beta_schedule": "",
+            "c5_wave_pad_noise": dict(_C5_WAVE_FWD3_PAD_NOISE),
+        },
+    )
+
+
+def c5_wave_fwd3_beta_thirds_decay(
+    train_steps: int = 16000,
+    grid: int = 128,
+    *,
+    beta_high: float = 5.0,
+    force_restart: bool = False,
+    enc_n_layer: int = 4,
+    patch_size: int = 16,
+    pad_noise: dict | None = None,
+    noise_profile: str = _C5_WAVE_FWD3_NOISE_PROFILE_P1,
+) -> dict:
+    """Change beta: first third high, middle linear→0, last third 0."""
+    _patch_geometry(patch_size, grid_out=grid)
+    run_id = _c5_wave_fwd3_banneal_run_id(
+        beta_high=beta_high,
+        enc_n_layer=enc_n_layer,
+        grid=grid,
+        patch_size=patch_size,
+        noise_profile=noise_profile if pad_noise is not None else None,
+    )
+    extra: dict[str, Any] = {
+        "c5_wave_change_group_ce": False,
+        "c5_wave_change_ce_beta": beta_high,
+        "c5_wave_change_ce_beta_high": beta_high,
+        "c5_wave_change_ce_beta_schedule": "thirds_decay",
+    }
+    if pad_noise is not None:
+        extra["c5_wave_pad_noise"] = pad_noise
+    ps_note = f", P={patch_size}" if patch_size != 16 else ""
+    noise_note = f", pad noise profile {noise_profile}" if pad_noise else ""
+    return _c5_wave_fwd3_flat_spec(
+        run_id=run_id,
+        train_steps=train_steps,
+        enc_n_layer=enc_n_layer,
+        patch_size=patch_size,
+        force_restart=force_restart,
+        notes=(
+            f"C5 fwd3 beta schedule thirds_decay peak={beta_high}, flat lr, "
+            f"step mix 50%, L{enc_n_layer}{ps_note}{noise_note}, target {train_steps} steps"
+        ),
+        extra_overrides=extra,
+    )
+
+
+def c5_wave_fwd3_banneal5_L4(train_steps: int = 16000, grid: int = 128) -> dict:
+    """Anneal β5 fwd3, L4 P16, full train store (no pad noise)."""
+    return c5_wave_fwd3_beta_thirds_decay(train_steps, grid, beta_high=5.0, enc_n_layer=4, patch_size=16)
+
+
+def c5_wave_fwd3_L4_p16_100k_ablation_queue(train_steps: int = 16000) -> list[dict]:
+    """L4 P16 on 100k: banneal β5 vs plain β=0, both with noisep1, same fwd3 mix."""
+    return [
+        c5_wave_fwd3_banneal5_noisep1(train_steps),
+        c5_wave_fwd3_plain_noisep1(train_steps),
+    ]
+
+
+def c5_wave_fwd3_banneal5_L2(train_steps: int = 16000, grid: int = 128) -> dict:
+    """Anneal β5 fwd3 on L2 (same recipe as banneal L4; test whether shallow net catches up)."""
+    return c5_wave_fwd3_beta_thirds_decay(train_steps, grid, beta_high=5.0, enc_n_layer=2)
+
+
+def c5_wave_fwd3_banneal5_p32(train_steps: int = 16000, grid: int = 128) -> dict:
+    """Anneal β5 fwd3 with patch 32 (8×8 tokens on 128 grid) — prep for larger canvas."""
+    return c5_wave_fwd3_beta_thirds_decay(train_steps, grid, beta_high=5.0, patch_size=32)
+
+
+def c5_wave_fwd3_banneal5_noisep1(train_steps: int = 16000, grid: int = 128) -> dict:
+    """Anneal β5 fwd3 + pad noise profile p1 (training pads only, clean targets)."""
+    return c5_wave_fwd3_beta_thirds_decay(
+        train_steps,
+        grid,
+        beta_high=5.0,
+        pad_noise=dict(_C5_WAVE_FWD3_PAD_NOISE),
+        noise_profile=_C5_WAVE_FWD3_NOISE_PROFILE_P1,
+    )
+
+
+def _c5_wave_fwd3_banneal5_noisep1_combo(
+    train_steps: int,
+    grid: int,
+    *,
+    enc_n_layer: int,
+    patch_size: int,
+) -> dict:
+    return c5_wave_fwd3_beta_thirds_decay(
+        train_steps,
+        grid,
+        beta_high=5.0,
+        enc_n_layer=enc_n_layer,
+        patch_size=patch_size,
+        pad_noise=dict(_C5_WAVE_FWD3_PAD_NOISE),
+        noise_profile=_C5_WAVE_FWD3_NOISE_PROFILE_P1,
+    )
+
+
+def c5_wave_fwd3_banneal5_p32_noisep1(train_steps: int = 16000, grid: int = 128) -> dict:
+    """Anneal β5, P32, noise p1 — combine successful p32 geometry with rollout-robust pads."""
+    return _c5_wave_fwd3_banneal5_noisep1_combo(train_steps, grid, enc_n_layer=4, patch_size=32)
+
+
+def c5_wave_fwd3_banneal5_L2_p32_noisep1(train_steps: int = 16000, grid: int = 128) -> dict:
+    """Anneal β5, L2, P32, noise p1 — shallow net + coarser tokens + perturbed pads."""
+    return _c5_wave_fwd3_banneal5_noisep1_combo(train_steps, grid, enc_n_layer=2, patch_size=32)
+
+
+def c5_wave_fwd3_banneal5_L2_noisep1(train_steps: int = 16000, grid: int = 128) -> dict:
+    """Anneal β5, L2, P16, noise p1 — shallow net + standard tokens + perturbed pads."""
+    return _c5_wave_fwd3_banneal5_noisep1_combo(train_steps, grid, enc_n_layer=2, patch_size=16)
+
+
+def c5_wave_fwd3_banneal5_p64_noisep1(train_steps: int = 16000, grid: int = 128) -> dict:
+    """Anneal β5, L4, P64 (4×4 tokens on 128 grid), noise p1 — coarsest patch in sweep."""
+    return _c5_wave_fwd3_banneal5_noisep1_combo(train_steps, grid, enc_n_layer=4, patch_size=64)
+
+
+def c5_wave_fwd3_anneal_l2_p16_p64_noisep1_queue(train_steps: int = 16000) -> list[dict]:
+    """L2+P16+noisep1 vs L4+P64+noisep1 (patch geometry bracket on noise recipe)."""
+    return [
+        c5_wave_fwd3_banneal5_L2_noisep1(train_steps),
+        c5_wave_fwd3_banneal5_p64_noisep1(train_steps),
+    ]
+
+
+def c5_wave_fwd3_anneal_followup_queue(train_steps: int = 16000) -> list[dict]:
+    """After plain L2 + banneal L4: p32 geometry, L2 anneal, L4 anneal + pad noise."""
+    return [
+        c5_wave_fwd3_banneal5_p32(train_steps),
+        c5_wave_fwd3_banneal5_L2(train_steps),
+        c5_wave_fwd3_banneal5_noisep1(train_steps),
+    ]
+
+
+def c5_wave_fwd3_anneal_p32_noise_queue(train_steps: int = 16000) -> list[dict]:
+    """After p32 / L2 / noisep1 singles: stack p32 with noise; L2+p32+noise."""
+    return [
+        c5_wave_fwd3_banneal5_p32_noisep1(train_steps),
+        c5_wave_fwd3_banneal5_L2_p32_noisep1(train_steps),
+    ]
+
+
+# Backward SFT: peel fronts (wave_back, token BACK) + terminal at start (wave_origin, token DRAW).
+# No wave_draw — path is already on the pad; DONE pass adds little. Goal-side BACK is wave_reach (fwd mix).
+_C5_BWD2_KEYS = ["wave_back", "wave_origin"]
+_C5_BWD2_W_BACK60 = [0.6, 0.4]
+_C5_BWD_ROLLOUT_START = "first_back"
+
+
+def _c5_wave_bwd2_banneal_run_id(
+    *,
+    beta_high: float,
+    enc_n_layer: int,
+    grid: int,
+    patch_size: int = 16,
+    noise_profile: str | None = None,
+) -> str:
+    btag = int(beta_high) if beta_high == int(beta_high) else beta_high
+    tag = f"banneal{btag}" + (f"_noise{noise_profile}" if noise_profile else "")
+    mid = f"L{enc_n_layer}"
+    if patch_size != 16:
+        mid = f"{mid}_p{patch_size}"
+    return f"c5_r5_wave_bwd2_{tag}_{mid}_g{grid}_{_C5_WAVE_STORE_TAG}"
+
+
+def _c5_wave_bwd2_flat_spec(
+    *,
+    run_id: str,
+    train_steps: int,
+    notes: str,
+    enc_n_layer: int = 4,
+    grid: int = 128,
+    patch_size: int = 16,
+    force_restart: bool = False,
+    extra_overrides: dict[str, Any] | None = None,
+) -> dict:
+    spec = _c5_wave_mix_ablation(
+        run_id=run_id,
+        keys=_C5_BWD2_KEYS,
+        weights=_C5_BWD2_W_BACK60,
+        train_steps=train_steps,
+        eval_key="wave_back",
+        notes=notes,
+        enc_n_layer=enc_n_layer,
+        grid=grid,
+        patch_size=patch_size,
+    )
+    spec["lr_horizon_steps"] = _M1_REPORT_LR_FLAT_HORIZON
+    spec["force_restart"] = force_restart
+    ov: dict[str, Any] = {
+        "t_train": train_steps,
+        **_c5_wave_long_run_compile_overrides(),
+        "c4_grid_loss": "ce",
+        "c5_wave_eval_decision_rule": True,
+        "diagnostics_wave_rollout_start_pass": _C5_BWD_ROLLOUT_START,
+    }
+    if extra_overrides:
+        ov.update(extra_overrides)
+    spec["overrides"] = {**spec["overrides"], **ov}
+    return spec
+
+
+def c5_wave_bwd2_beta_thirds_decay(
+    train_steps: int = 16000,
+    grid: int = 128,
+    *,
+    beta_high: float = 5.0,
+    force_restart: bool = False,
+    enc_n_layer: int = 4,
+    patch_size: int = 16,
+    pad_noise: dict | None = None,
+    noise_profile: str = _C5_WAVE_FWD3_NOISE_PROFILE_P1,
+) -> dict:
+    _patch_geometry(patch_size, grid_out=grid)
+    run_id = _c5_wave_bwd2_banneal_run_id(
+        beta_high=beta_high,
+        enc_n_layer=enc_n_layer,
+        grid=grid,
+        patch_size=patch_size,
+        noise_profile=noise_profile if pad_noise is not None else None,
+    )
+    extra: dict[str, Any] = {
+        "c5_wave_change_group_ce": False,
+        "c5_wave_change_ce_beta": beta_high,
+        "c5_wave_change_ce_beta_high": beta_high,
+        "c5_wave_change_ce_beta_schedule": "thirds_decay",
+    }
+    if pad_noise is not None:
+        extra["c5_wave_pad_noise"] = pad_noise
+    ps_note = f", P={patch_size}" if patch_size != 16 else ""
+    noise_note = f", pad noise profile {noise_profile}" if pad_noise else ""
+    return _c5_wave_bwd2_flat_spec(
+        run_id=run_id,
+        train_steps=train_steps,
+        enc_n_layer=enc_n_layer,
+        patch_size=patch_size,
+        force_restart=force_restart,
+        notes=(
+            f"C5 bwd2 beta schedule thirds_decay peak={beta_high}, flat lr, "
+            f"60% wave_back / 40% origin, L{enc_n_layer}{ps_note}{noise_note}, rollout {_C5_BWD_ROLLOUT_START}, {train_steps} steps"
+        ),
+        extra_overrides=extra,
+    )
+
+
+def _c5_wave_bwd2_banneal5_noisep1_combo(
+    train_steps: int, grid: int, *, enc_n_layer: int, patch_size: int,
+) -> dict:
+    return c5_wave_bwd2_beta_thirds_decay(
+        train_steps,
+        grid,
+        beta_high=5.0,
+        enc_n_layer=enc_n_layer,
+        patch_size=patch_size,
+        pad_noise=dict(_C5_WAVE_FWD3_PAD_NOISE),
+        noise_profile=_C5_WAVE_FWD3_NOISE_PROFILE_P1,
+    )
+
+
+def c5_wave_bwd2_banneal5_L4_noisep1(train_steps: int = 16000, grid: int = 128) -> dict:
+    """Bwd2 L4 P16, banneal β5, noisep1, 100k store."""
+    return _c5_wave_bwd2_banneal5_noisep1_combo(train_steps, grid, enc_n_layer=4, patch_size=16)
+
+
+def c5_wave_bwd2_plain_noisep1(train_steps: int = 16000, grid: int = 128) -> dict:
+    """Bwd2 L4 P16, plain CE β=0, noisep1 — pairs with banneal5_L4_noisep1."""
+    return _c5_wave_bwd2_flat_spec(
+        run_id=f"c5_r5_wave_bwd2_plain_noisep1_L4_g{grid}_{_C5_WAVE_STORE_TAG}",
+        train_steps=train_steps,
+        enc_n_layer=4,
+        patch_size=16,
+        notes=(
+            f"C5 bwd2 plain CE β=0, noisep1, 60/40 back/origin, L4 P16, rollout {_C5_BWD_ROLLOUT_START}, {train_steps} steps"
+        ),
+        extra_overrides={
+            "c5_wave_change_group_ce": False,
+            "c5_wave_change_ce_beta": 0.0,
+            "c5_wave_change_ce_beta_schedule": "",
+            "c5_wave_pad_noise": dict(_C5_WAVE_FWD3_PAD_NOISE),
+        },
+    )
+
+
+def c5_wave_bwd2_L4_p16_noisep1_ablation_queue(train_steps: int = 16000) -> list[dict]:
+    """L4 P16 bwd2 on 100k: banneal β5 vs plain β=0, both noisep1 (same as fwd ablation axes)."""
+    return [
+        c5_wave_bwd2_banneal5_L4_noisep1(train_steps),
+        c5_wave_bwd2_plain_noisep1(train_steps),
+    ]
+
+
+def c5_wave_bwd2_banneal5_L2_noisep1(train_steps: int = 16000, grid: int = 128) -> dict:
+    return _c5_wave_bwd2_banneal5_noisep1_combo(train_steps, grid, enc_n_layer=2, patch_size=16)
+
+
+def c5_wave_bwd2_banneal5_L4_p32_noisep1(train_steps: int = 16000, grid: int = 128) -> dict:
+    return _c5_wave_bwd2_banneal5_noisep1_combo(train_steps, grid, enc_n_layer=4, patch_size=32)
+
+
+def c5_wave_bwd2_banneal5_L2_p32_noisep1(train_steps: int = 16000, grid: int = 128) -> dict:
+    return _c5_wave_bwd2_banneal5_noisep1_combo(train_steps, grid, enc_n_layer=2, patch_size=32)
+
+
+def c5_wave_bwd2_anneal_noisep1_queue(train_steps: int = 16000) -> list[dict]:
+    return [
+        c5_wave_bwd2_banneal5_L2_noisep1(train_steps),
+        c5_wave_bwd2_banneal5_L4_p32_noisep1(train_steps),
+        c5_wave_bwd2_banneal5_L2_p32_noisep1(train_steps),
+    ]
+
+
+def c5_wave_fwd3_beta2_L2_staple(train_steps: int = 16000, grid: int = 128) -> dict:
+    """Reference: L2, beta=2, flat lr, 50% step mix (extend steps on same run id)."""
+    return _c5_wave_fwd3_flat_spec(
+        run_id=f"c5_r5_wave_fwd3_beta2_L2_g{grid}_store40k",
+        train_steps=train_steps,
+        enc_n_layer=2,
+        notes=f"C5 staple: L2 fwd3 beta=2 flat lr, step mix 50%, target {train_steps} steps",
+        extra_overrides=_c5_wave_beta_overrides(beta=2.0),
+    )
+
+
+def c5_wave_oct2_queue() -> list[dict]:
+    return [
+        c5_wave_fwd3_plain(16000),
+        c5_wave_fwd3_beta_thirds_decay(16000, beta_high=5.0),
+        c5_wave_fwd3_beta2_L2_staple(16000),
+    ]
+
+
+def _c5_wave_beta_overrides(*, beta: float = 10.0, **extra: Any) -> dict[str, Any]:
+    """Plain CE + per-task fg weights; changing cells scaled by (1 + beta)."""
+    return {
+        "c4_grid_loss": "ce",
+        "c5_wave_change_group_ce": False,
+        "c5_wave_change_ce_beta": beta,
+        "c5_wave_change_pad_px": 0,
+        "c5_wave_eval_decision_rule": True,
+        **_c5_wave_long_run_compile_overrides(),
+        **extra,
+    }
+
+
+def _c5_wave_mix_ablation(
+    *,
+    run_id: str,
+    keys: list[str],
+    weights: list[float],
+    train_steps: int,
+    eval_key: str,
+    notes: str,
+    enc_n_layer: int = 4,
+    grid: int = 128,
+    patch_size: int = 16,
+) -> dict:
+    spec = _c4_night_spec(
+        run_id=run_id, keys=keys, weights=weights, train_steps=train_steps, seed=4,
+        enc_n_layer=enc_n_layer, c4_routes_subdir="c4_100k", encoding_mode="onehot_v4_sp",
+        worldsnap_max_train_items=_C5_WAVE_TRAIN_ITEMS, grid_out_size=grid, patch_size=patch_size,
+        c5_token_targets=True, c5_token_head_enabled=True, c5_n_token_classes=41,
+        notes=notes,
+    )
+    spec["overrides"]["c4_eval_task_key"] = eval_key
+    return spec
+
+
+def c5_wave_mix_forward3(train_steps: int = 4000, grid: int = 128) -> dict:
+    """(i) Forward only: first / step / reach — no backward interference."""
+    keys = ["wave_first", "wave_step", "wave_reach"]
+    return _c5_wave_mix_ablation(
+        run_id=f"c5_r5_wave_mix_fwd3_L4_{train_steps // 1000}k_g{grid}_store40k",
+        keys=keys, weights=[1 / 3] * 3, train_steps=train_steps, eval_key="wave_step",
+        notes=f"C5 wave ablation (i): forward mix ⅓ each, L4 {train_steps // 1000}k; watch c5_wave_new_recall_wave_step",
+    )
+
+
+def c5_wave_mix_back2(train_steps: int = 4000, grid: int = 128) -> dict:
+    """(ii) Backward only: back + origin (no draw)."""
+    keys = ["wave_back", "wave_origin"]
+    return _c5_wave_mix_ablation(
+        run_id=f"c5_r5_wave_mix_bwd2_L4_{train_steps // 1000}k_g{grid}_store40k",
+        keys=keys, weights=[0.5, 0.5], train_steps=train_steps, eval_key="wave_back",
+        notes=f"C5 wave ablation (ii): backward mix ½ each, L4 {train_steps // 1000}k; no wave_draw",
+    )
+
+
+def c5_wave_mix_step_back(train_steps: int = 16000, grid: int = 128) -> dict:
+    """(iii) Emit vs peel: only wave_step and wave_back (competition diagnostic)."""
+    return _c5_wave_mix_ablation(
+        run_id=f"c5_r5_wave_mix_step_back_L4_{train_steps // 1000}k_g{grid}_store40k",
+        keys=["wave_step", "wave_back"], weights=[0.5, 0.5], train_steps=train_steps, eval_key="wave_step",
+        notes=f"C5 wave ablation (iii): ½ step + ½ back, L4 {train_steps // 1000}k; primary metric new recall on both",
+    )
+
+
+def c5_wave_ablation_queue() -> list[dict]:
+    """Legacy 4k probe + step↔back 16k (4k mixes underperformed singles; use half_duration_queue)."""
+    return [
+        c5_wave_mix_forward3(train_steps=4000),
+        c5_wave_mix_back2(train_steps=4000),
+        c5_wave_mix_step_back(),
+    ]
+
+
+def _c5_wave_resume_4k_to(spec: dict, *, train_steps: int, label: str) -> dict:
+    """Same ``run_id`` / checkpoint as the 4k ablation; harness auto-resumes from step ~3999."""
+    run_id = spec["id"]
+    if not run_id.endswith("_4k_g128_store40k"):
+        raise ValueError(f"expected 4k run_id to resume, got {run_id!r}")
+    spec["train_steps"] = train_steps
+    spec["lr_horizon_steps"] = train_steps
+    spec["force_restart"] = False
+    spec["notes"] = (
+        f"{label}: continue {run_id} from 4k checkpoint → {train_steps // 1000}k total steps "
+        f"(do not change run_id — harness auto_resume)"
+    )
+    return spec
+
+
+def c5_wave_mix5_cgce(train_steps: int = 8000, enc_n_layer: int = 4, grid: int = 128) -> dict:
+    """Five wave tasks (no draw), equal mix, change-group CE."""
+    keys = ["wave_first", "wave_step", "wave_reach", "wave_back", "wave_origin"]
+    spec = _c5_wave_mix_ablation(
+        run_id=f"c5_r5_wave_mix5_cgce_L{enc_n_layer}_{train_steps // 1000}k_g{grid}_store40k",
+        keys=keys,
+        weights=[1 / 5] * 5,
+        train_steps=train_steps,
+        eval_key="wave_step",
+        notes=f"C5 wave mix5 + change-group CE, L{enc_n_layer} {train_steps // 1000}k",
+        enc_n_layer=enc_n_layer,
+    )
+    spec["overrides"] = {**spec["overrides"], **_c5_wave_change_ce_overrides()}
+    return spec
+
+
+def c5_wave_mix_forward3_cgce(train_steps: int = 8000, grid: int = 128) -> dict:
+    spec = c5_wave_mix_forward3(train_steps=train_steps, grid=grid)
+    spec["id"] = f"c5_r5_wave_mix_fwd3_cgce_L4_{train_steps // 1000}k_g{grid}_store40k"
+    spec["lr_horizon_steps"] = train_steps
+    spec["force_restart"] = True
+    spec["notes"] = f"C5 fwd3 + change-group CE, L4 {train_steps // 1000}k"
+    spec["overrides"] = {**spec["overrides"], **_c5_wave_change_ce_overrides()}
+    return spec
+
+
+def c5_wave_mix_back2_cgce(train_steps: int = 8000, grid: int = 128) -> dict:
+    spec = c5_wave_mix_back2(train_steps=train_steps, grid=grid)
+    spec["id"] = f"c5_r5_wave_mix_bwd2_cgce_L4_{train_steps // 1000}k_g{grid}_store40k"
+    spec["lr_horizon_steps"] = train_steps
+    spec["force_restart"] = True
+    spec["notes"] = f"C5 bwd2 + change-group CE, L4 {train_steps // 1000}k"
+    spec["overrides"] = {**spec["overrides"], **_c5_wave_change_ce_overrides()}
+    return spec
+
+
+def c5_wave_change_ce_smoke() -> dict:
+    """~500 steps on fwd3 only; verify loss runs with group CE."""
+    spec = c5_wave_mix_forward3_cgce(train_steps=500, grid=128)
+    spec["id"] = "c5_r5_wave_change_ce_smoke_500"
+    spec["force_restart"] = True
+    spec["overrides"]["eval_interval"] = 250
+    spec["overrides"]["diagnostics_enabled"] = True
+    return spec
+
+
+def c5_wave_compile_smoke(*, use_compile_dynamic: bool = False) -> dict:
+    """Short fwd3 beta run: harness auto-compile (lowered min_steps), probe B=train B; A/B dynamic flag."""
+    steps = 512
+    spec = c5_wave_mix_forward3_beta(train_steps=steps, beta=2.0)
+    tag = "dyn" if use_compile_dynamic else "static"
+    spec["id"] = f"c5_r5_wave_compile_smoke_512_{tag}"
+    spec["train_steps"] = steps
+    spec["lr_horizon_steps"] = steps
+    spec["force_restart"] = True
+    spec["notes"] = (
+        f"Compile smoke only: auto compile (min_steps=400), dynamic={use_compile_dynamic}; "
+        "probe batch follows train batch_size when compile on; not a training-quality run"
+    )
+    spec["overrides"] = {
+        **spec["overrides"],
+        "use_compile_min_train_steps": 400,
+        "use_compile_dynamic": use_compile_dynamic,
+        "eval_interval": 256,
+        "harness_save_checkpoints": False,
+    }
+    return spec
+
+
+def c5_wave_change_ce_queue(*, fwd_bwd_steps: int = 4000, mix5_steps: int = 4000) -> list[dict]:
+    """fwd3 + bwd2 + mix5 with change-group CE (fresh ``*_cgce_*`` run ids)."""
+    return [
+        c5_wave_mix_forward3_cgce(train_steps=fwd_bwd_steps),
+        c5_wave_mix_back2_cgce(train_steps=fwd_bwd_steps),
+        c5_wave_mix5_cgce(train_steps=mix5_steps),
+    ]
+
+
+def c5_wave_mix_forward3_beta(
+    train_steps: int = 4000, grid: int = 128, *, beta: float = 10.0
+) -> dict:
+    """Forward mix + soft change upweight (1 + beta) on pad≠target cells; keeps fg table weights."""
+    btag = int(beta) if beta == int(beta) else beta
+    spec = c5_wave_mix_forward3(train_steps=train_steps, grid=grid)
+    spec["id"] = f"c5_r5_wave_mix_fwd3_beta{btag}_L4_{train_steps // 1000}k_g{grid}_store40k"
+    spec["lr_horizon_steps"] = train_steps
+    spec["force_restart"] = True
+    spec["notes"] = (
+        f"C5 fwd3 + change beta={beta} (plain CE, fg weights), L4 {train_steps // 1000}k; "
+        "IoU/false_fg gate, not new recall alone"
+    )
+    spec["overrides"] = {**spec["overrides"], **_c5_wave_beta_overrides(beta=beta)}
+    return spec
+
+
+def c5_wave_mix_forward3_cgce_pad(
+    train_steps: int = 4000, grid: int = 128, *, pad_px: int = 10
+) -> dict:
+    """Forward mix + group CE with a dilated halo (fifth group) around core change cells."""
+    spec = c5_wave_mix_forward3(train_steps=train_steps, grid=grid)
+    spec["id"] = f"c5_r5_wave_mix_fwd3_cgce_pad{pad_px}_L4_{train_steps // 1000}k_g{grid}_store40k"
+    spec["lr_horizon_steps"] = train_steps
+    spec["force_restart"] = True
+    spec["notes"] = (
+        f"C5 fwd3 + change-group CE + {pad_px}px change halo, L4 {train_steps // 1000}k"
+    )
+    spec["overrides"] = {
+        **spec["overrides"],
+        **_c5_wave_change_ce_overrides(c5_wave_change_pad_px=pad_px),
+    }
+    return spec
+
+
+def c5_wave_change_fwd4k_queue(*, beta: float = 10.0, pad_px: int = 10) -> list[dict]:
+    """Two forward-only 4k probes: beta upweight vs group CE + padded change focus."""
+    return [
+        c5_wave_mix_forward3_beta(train_steps=4000, beta=beta),
+        c5_wave_mix_forward3_cgce_pad(train_steps=4000, pad_px=pad_px),
+    ]
+
+
+def c5_wave_change_fwd_beta_queue(
+    betas: tuple[float, ...] = (2.0, 5.0), *, train_steps: int = 4000, grid: int = 128
+) -> list[dict]:
+    """Forward mix @ 4k for each change beta (same recipe as beta10)."""
+    return [c5_wave_mix_forward3_beta(train_steps=train_steps, grid=grid, beta=b) for b in betas]
+
+
+def c5_wave_change_fwd_beta_resume_queue(
+    betas: tuple[float, ...] = (2.0, 5.0, 10.0),
+    *,
+    train_steps: int = 12000,
+    grid: int = 128,
+) -> list[dict]:
+    """Same ``*_4k_*`` run ids; cosine LR with ``lr_horizon_steps=train_steps``; harness auto-resumes."""
+    out: list[dict] = []
+    for b in betas:
+        spec = c5_wave_mix_forward3_beta(train_steps=4000, grid=grid, beta=b)
+        out.append(
+            _c5_wave_resume_4k_to(spec, train_steps=train_steps, label=f"fwd3 beta={b} cosine→{train_steps // 1000}k")
+        )
+    return out
+
+
+def c5_wave_change_fwd_beta_resume_8k_queue(
+    betas: tuple[float, ...] = (2.0, 5.0, 10.0),
+    *,
+    train_steps: int = 8000,
+    grid: int = 128,
+) -> list[dict]:
+    return c5_wave_change_fwd_beta_resume_queue(betas, train_steps=train_steps, grid=grid)
+
+
+def c5_wave_mix_forward3_beta_lrflat(
+    train_steps: int = 12000, grid: int = 128, *, beta: float = 10.0
+) -> dict:
+    """Fresh fwd3 + change beta, flat LR (``lr_horizon`` = 50M), own ``*_lrflat_*12k_*`` run id."""
+    btag = int(beta) if beta == int(beta) else beta
+    spec = c5_wave_mix_forward3_beta(train_steps=train_steps, grid=grid, beta=beta)
+    spec["id"] = f"c5_r5_wave_mix_fwd3_beta{btag}_lrflat_L4_{train_steps // 1000}k_g{grid}_store40k"
+    spec["lr_horizon_steps"] = _M1_REPORT_LR_FLAT_HORIZON
+    spec["force_restart"] = True
+    spec["notes"] = (
+        f"C5 fwd3 change beta={beta}, flat lr 1e-3 (horizon={_M1_REPORT_LR_FLAT_HORIZON}), "
+        f"L4 {train_steps // 1000}k fresh run_id"
+    )
+    return spec
+
+
+def c5_wave_change_fwd_beta_explore_12k_queue(
+    betas: tuple[float, ...] = (2.0, 5.0, 10.0),
+    *,
+    train_steps: int = 12000,
+    grid: int = 128,
+) -> list[dict]:
+    """Per beta: resume cosine ``*_4k_*`` → 12k, then fresh flat-lr 12k sibling."""
+    out = c5_wave_change_fwd_beta_resume_queue(betas, train_steps=train_steps, grid=grid)
+    for b in betas:
+        out.append(c5_wave_mix_forward3_beta_lrflat(train_steps=train_steps, grid=grid, beta=b))
+    return out
+
+
+def c5_wave_change_fwd_beta_lrflat_12k_queue(
+    betas: tuple[float, ...] = (2.0, 5.0),
+    *,
+    train_steps: int = 12000,
+    grid: int = 128,
+) -> list[dict]:
+    """Fresh flat-lr 12k only (separate ``*_lrflat_*`` run ids; compile-friendly)."""
+    return [
+        c5_wave_mix_forward3_beta_lrflat(train_steps=train_steps, grid=grid, beta=b) for b in betas
+    ]
+
+
+def c5_wave_half_duration_queue(train_steps: int = 8000) -> list[dict]:
+    """Extend the 4k forward/back mixes to 8k on the **same** checkpoints (not new run_ids).
+
+    Gate before step↔back mix: ``c5_wave_new_recall_wave_step`` / ``wave_back`` on val via
+    ``python -m diagnostics.wave_eval_dashboard <run_id>`` (singles @8k: step new ~0.65, back ~0.64).
+    """
+    return [
+        _c5_wave_resume_4k_to(c5_wave_mix_forward3(train_steps=4000), train_steps=train_steps, label="(i) fwd3"),
+        _c5_wave_resume_4k_to(c5_wave_mix_back2(train_steps=4000), train_steps=train_steps, label="(ii) bwd2"),
+    ]
+
+
+def c5_wave_mix_natural(enc_n_layer: int = 4, train_steps: int = 24000, grid: int = 128, beta: float = 5.0,
+                        pad_noise: dict | None = None, lr_flat: bool = False) -> dict:
+    """C5 R5 (2 Oct): the wave search sampled the way a rollout produces it: wave_fwd (k uniform over the route's
+    forward passes, token BACK on the last), wave_bwd (j uniform over the fronts, DRAW on the last), wave_draw; shares
+    4 : 4 : 1 (passes per route). Optional pad noise in training (dict, see config.c5_wave_pad_noise)."""
+    tag = f"nat3_beta{beta:g}" + ("_noise" if pad_noise else "") + ("_lrflat" if lr_flat else "")
+    spec = _c4_night_spec(run_id=f"c5_r5_wave_{tag}_L{enc_n_layer}_{train_steps // 1000}k_g{grid}_{_C5_WAVE_STORE_TAG}",
+                          keys=["wave_fwd", "wave_bwd", "wave_draw"], weights=[4 / 9, 4 / 9, 1 / 9], train_steps=train_steps,
+                          seed=4, enc_n_layer=enc_n_layer, c4_routes_subdir="c4_100k", encoding_mode="onehot_v4_sp",
+                          worldsnap_max_train_items=_C5_WAVE_TRAIN_ITEMS, grid_out_size=grid, c5_token_targets=True, c5_token_head_enabled=True,
+                          c5_n_token_classes=41, c5_wave_pad_noise=pad_noise,
+                          notes=f"C5 R5 natural mix: wave_fwd/wave_bwd/wave_draw 4:4:1, beta {beta:g}, {enc_n_layer} blocks, {train_steps // 1000}k, {grid}x{grid}"
+                                + (f", pad noise {pad_noise}" if pad_noise else ""))
+    spec["overrides"]["c4_eval_task_key"] = "wave_bwd"
+    spec["overrides"].update(_c5_wave_beta_overrides(beta=beta))      # Marvin's loss recipe (plain CE, beta on changed cells)
+    if lr_flat:
+        spec["lr_horizon_steps"] = 10 ** 9                               # cosine horizon far beyond the run = flat lr (as m1 lrflat)
+    return spec
+
+
+_C5_TOKEN_LOSS_WEIGHT = 0.1   # 2 Oct counter tests: at 1.0 the token loss dominates any wave mix and blurs the grid
+
+
+def c5_wave_night_queue_2oct(bwd_steps: int = 16000, long_steps: int = 48000) -> list[dict]:
+    """Night queue 2/3 Oct 2026, with what the counter tests showed: token loss weight 0.1, cosine lr over the run
+    (flat lr made the mix worse), pad noise p1, 100k store.
+      1-3  bwd2 (back/origin 60/40), L2, 16k: annealed beta 5 / plain beta 0 / annealed beta 5 without the lit-cell
+           weight (c4_weight_alpha 0 -> weight 1, the output is then calibrated at 0.5 once beta has decayed)
+      4-5  the whole search in one network: wave_fwd / wave_bwd / wave_draw 4:4:1, annealed beta 5, 48k, L4 then L2
+    Read with harness/diagnostics/wave_rollout_eval.py RUN_ID (rollouts over the val routes, no figures)."""
+    noise = dict(_C5_WAVE_FWD3_PAD_NOISE)
+    anneal = {"c5_wave_change_ce_beta": 5.0, "c5_wave_change_ce_beta_high": 5.0, "c5_wave_change_ce_beta_schedule": "thirds_decay"}
+    tag = f"L2_{bwd_steps // 1000}k_g128_{_C5_WAVE_STORE_TAG}"
+
+    def bwd2(name: str, what: str, spec: dict, **extra) -> dict:
+        spec["id"] = f"c5_r5_wave_bwd2_tok01_{name}_{tag}"
+        spec["lr_horizon_steps"] = bwd_steps                              # cosine over the run
+        spec["notes"] = f"C5 bwd2 60/40 back/origin, token loss weight {_C5_TOKEN_LOSS_WEIGHT}, cosine, noise p1, L2 {bwd_steps} steps: {what}"
+        spec["overrides"].update({"c5_token_loss_weight": _C5_TOKEN_LOSS_WEIGHT, **extra})
+        return spec
+
+    out = [
+        bwd2("banneal5_noisep1", "annealed beta 5",
+             c5_wave_bwd2_beta_thirds_decay(bwd_steps, beta_high=5.0, enc_n_layer=2, pad_noise=noise)),
+        bwd2("plain_noisep1", "plain beta 0",
+             _c5_wave_bwd2_flat_spec(run_id="x", train_steps=bwd_steps, enc_n_layer=2, notes="",
+                                     extra_overrides={"c5_wave_change_group_ce": False, "c5_wave_change_ce_beta": 0.0,
+                                                      "c5_wave_change_ce_beta_schedule": "", "c5_wave_pad_noise": noise})),
+        bwd2("banneal5_alpha0_noisep1", "annealed beta 5, no lit-cell weight",
+             c5_wave_bwd2_beta_thirds_decay(bwd_steps, beta_high=5.0, enc_n_layer=2, pad_noise=noise), c4_weight_alpha=0.0),
+    ]
+    for L in (4, 2):
+        spec = c5_wave_mix_natural(enc_n_layer=L, train_steps=long_steps, beta=5.0, pad_noise=noise)
+        spec["id"] = f"c5_r5_wave_nat3_tok01_banneal5_noisep1_L{L}_{long_steps // 1000}k_g128_{_C5_WAVE_STORE_TAG}"
+        spec["lr_horizon_steps"] = long_steps
+        spec["notes"] = (f"C5 whole search in one network: wave_fwd/wave_bwd/wave_draw 4:4:1, token loss weight {_C5_TOKEN_LOSS_WEIGHT}, "
+                         f"annealed beta 5, cosine, noise p1, L{L} {long_steps} steps")
+        spec["overrides"].update({"c5_token_loss_weight": _C5_TOKEN_LOSS_WEIGHT, "t_train": long_steps, **anneal,
+                                  "diagnostics_wave_rollout_start_pass": 1})
+        out.append(spec)
+    return out
+
+
+_C5_OWN_PADS_SOURCE_RUN = "c5_r5_wave_nat3_tok01_banneal5_noisep1_L4_48k_g128_store100k"   # the network whose pads are stored
+
+
+def c5_wave_own_pads_queue(cont_steps: int = 16000, long_steps: int = 48000, p: float = 0.5, cont_lr: float = 3e-4) -> list[dict]:
+    """C5 R5 own pads (3 Oct 2026): train on the network's own scratchpads, not only the teacher's. The store
+    c5_own_pads_train.npz (spatial_data/c5_own_pads.py, built from the L4 48k checkpoint under the teacher's pass
+    schedule, first 40k train routes) replaces the clean pad in with probability p by the network's output of the
+    pass that produces that input; then the pad noise p1 as before; the target stays the teacher's clean next pad.
+    The store covers routes 0..39,999 of the 100k the runs load, so the share of wave samples on own pads is
+    p x 0.4 (x ~0.9: the first forward pass reads the start disc and is never replaced).
+      a  continue the L4 48k network for cont_steps with own pads: fresh optimizer, step counter from 0, cosine
+         from cont_lr (the 48k run ended at 1e-4; 1e-3 again would be a warm restart), beta 0 throughout (where the
+         48k anneal ended), token weight 0.1, noise p1
+      b  the L4 48k recipe of c5_wave_night_queue_2oct() from scratch, own pads from the start of the second third
+         (step 16k of 48k, where the beta anneal starts to decay; docs/plans/NEXT_STEPS_2026-10-03.md §3), switched
+         on at once, not ramped
+    Read with harness/diagnostics/wave_rollout_eval.py RUN_ID (free-running success against the 75 % of the source)."""
+    import copy
+    own = {"path": "c5_own_pads_train.npz", "p": p}
+    ptag = f"ownp{int(round(p * 100)):02d}"
+    L4 = next(sp for sp in c5_wave_night_queue_2oct(long_steps=long_steps) if "_L4_" in sp["id"] and "nat3" in sp["id"])
+
+    a = copy.deepcopy(L4)
+    a["id"] = f"c5_r5_wave_nat3_tok01_{ptag}_from48k_L4_{cont_steps // 1000}k_g128_{_C5_WAVE_STORE_TAG}"
+    a["train_steps"] = cont_steps
+    a["lr_horizon_steps"] = cont_steps
+    a["init_checkpoint"] = str(config.REPO_ROOT / "runs" / "checkpoints" / f"{_C5_OWN_PADS_SOURCE_RUN}.pt")
+    a["load_optimizer"] = False
+    a["reset_step_counter"] = True
+    a["force_restart"] = True          # with init_checkpoint the harness never auto-resumes: a stopped run starts over
+    a["overrides"].update({"t_train": cont_steps, "learning_rate": cont_lr, "c5_wave_own_pads": own,
+                           "c5_wave_change_ce_beta": 0.0, "c5_wave_change_ce_beta_schedule": ""})
+    a["notes"] = (f"C5 own pads (a): {_C5_OWN_PADS_SOURCE_RUN} continued {cont_steps} steps, own pads p {p} (first 40k routes), "
+                  f"noise p1, beta 0, cosine from {cont_lr:g}, fresh optimizer")
+
+    b = copy.deepcopy(L4)
+    b["id"] = f"c5_r5_wave_nat3_tok01_banneal5_noisep1_{ptag}_L4_{long_steps // 1000}k_g128_{_C5_WAVE_STORE_TAG}"
+    b["overrides"]["c5_wave_own_pads"] = {**own, "start_frac": 1 / 3}
+    b["notes"] = L4["notes"] + f"; own pads p {p} from {_C5_OWN_PADS_SOURCE_RUN} (first 40k routes) from step {long_steps // 3} on, from scratch"
+    return [a, b]
+
+
+def c5_wave_natural_noise_round(source_run: str, round_no: int, cont_steps: int = 16000, p: float = 0.5,
+                                cont_lr: float = 1e-4) -> dict:
+    """Natural noise, next round (4 Oct 2026): continue `source_run` for cont_steps on the store of ITS OWN drawings
+    (c5_own_pads_train_r{round_no}.npz, generated from that checkpoint over all 100k train routes with
+    spatial_data/c5_own_pads.py --out). Round 1 was c5_wave_own_pads_queue()[0] (store from the 48k network, +14 points
+    free-running on De Pijp val, +16 on the new map); each further round repairs the current network's own mistakes.
+    Same settings as round 1: fresh optimizer, cosine from cont_lr, beta 0, token weight 0.1, noise p1."""
+    spec = c5_wave_own_pads_queue(cont_steps=cont_steps, p=p, cont_lr=cont_lr)[0]
+    spec["id"] = f"c5_r5_wave_nat3_tok01_ownp{int(round(p * 100)):02d}_r{round_no}_L4_{cont_steps // 1000}k_g128_{_C5_WAVE_STORE_TAG}"
+    spec["init_checkpoint"] = str(config.REPO_ROOT / "runs" / "checkpoints" / f"{source_run}.pt")
+    spec["overrides"]["c5_wave_own_pads"] = {"path": f"c5_own_pads_train_r{round_no}.npz", "p": p}
+    spec["notes"] = (f"C5 natural noise round {round_no}: {source_run} continued {cont_steps} steps on its own drawings "
+                     f"(all 100k routes), p {p}, noise p1, beta 0, cosine from {cont_lr:g}, fresh optimizer")
+    return spec
+
+
+_C5_WAVE_BEST_256 = "c5_r5_wave_nat3_tok01_ownp50_from48k_L4_16k_g128_store100k"   # 78 % free-running, De Pijp val 500
+_C5_WAVE_512_STORE_TAG = "zc512"     # Zuid + Centrum, 512 m windows, store c4_512_20k (routes 40-500 m straight)
+
+
+def _c5_wave_512(spec: dict, *, patch_size: int = 16, batch_size: int = 128) -> dict:
+    """Move a 256 m wave spec to 512 m windows on the Zuid + Centrum store c4_512_20k: 512 px input at 1 m, output
+    256 x 256 cells of 2 m (the cell size of the 256 m runs, so fronts, path width and pad noise mean the same in
+    metres). P=16 gives 1024 patch tokens, P=32 gives 256 tokens of 16 x 16 cells each. The lit-cell weight comes from
+    the store's own task stats at grid 256 (c4_task_stats_g256.json), as it did at 256 m."""
+    _patch_geometry(patch_size, img_size=512, grid_out=256)
+    spec["overrides"].update(img_size=512, grid_out_size=256, patch_size=patch_size, batch_size=batch_size,
+                             district_name="zuid_centrum", cropset="v4ns", c4_routes_subdir="c4_512_20k",
+                             worldsnap_max_train_items=None, diagnostics_pred_c4_reference_subdir=None)
+    return spec
+
+
+def c5_wave_512_queue(patch_size: int = 16, enc_n_layer: int = 4, batch_size: int | None = None, long_steps: int = 48000,
+                      cont_steps: int = 16000, cont_lr: float = 1e-4) -> list[dict]:
+    """C5 R5 at 512 m windows (4 Oct 2026), Zuid + Centrum store c4_512_20k (20k train routes, 40-500 m straight,
+    walking up to ~1.1 km, up to 28 fronts at 40 m; wave data c5_wave_{split}.npz in uint16).
+      a  continue the best 256 m network (_C5_WAVE_BEST_256) at 512 m for cont_steps: same weights (no learned weight
+         depends on the window: sin-cos positions and the relative-bias table are rebuilt for 32 x 32 patches, the
+         bias is per clipped offset, the grid head is per patch), fresh optimizer, cosine from cont_lr, beta 0,
+         token weight 0.1, pad noise p1, no own pads (there is no 512 m own-pad store yet). P=16 only: a P=32 model
+         cannot take the 256 m weights (patch embedding and grid head change shape).
+      b  the whole-search recipe from scratch at 512 m, as the L4 48k run of c5_wave_night_queue_2oct(): wave_fwd /
+         wave_bwd / wave_draw 4:4:1, annealed beta 5, cosine over long_steps, token weight 0.1, noise p1.
+    Batch (4 Oct, RTX 3060 12 GB, measured): at P=16 (1024 tokens) batch 128 does not fit, 64 does (~10.6 GB peak
+    compiled, model only); at P=32 (256 tokens) 128 fits. batch_size=None picks 64 at P=16 and 128 at P=32; the learning
+    rate is not rescaled for batch 64 (an open choice; at 48k steps x 64 the run sees half the samples of the 256 m
+    run). Cost: ~136 samples/s at L4 P=16 b64 compiled -> 48k x 64 in ~6.3 h model time on the 3060 (48k x 128 ~12.5 h);
+    ~620 samples/s at L4 P=32 b128 -> ~2.8 h.
+    Read with harness/diagnostics/wave_rollout_eval.py RUN_ID --crops ../data/amsterdam/zuid_centrum/crops/v4ns
+    --store c4_512_20k --n 500 (and --split test once); the 256 m network's zero-shot number on the same routes is the
+    baseline (wave_rollout_eval_zuid_centrum_c4_512_20k_val.json of _C5_WAVE_BEST_256: 2.6 % solved, 26 % on 2-3
+    fronts; the first pass fails where the start lies beyond the trained 16 x 16 patch positions)."""
+    import copy
+    if batch_size is None:
+        batch_size = 128 if patch_size >= 32 else 64
+    L4 = next(sp for sp in c5_wave_night_queue_2oct(long_steps=long_steps) if "_L4_" in sp["id"] and "nat3" in sp["id"])
+    ptag = "" if patch_size == 16 else f"_p{patch_size}"
+    btag = "" if batch_size == 128 else f"_b{batch_size}"
+
+    a = _c5_wave_512(copy.deepcopy(L4), patch_size=16, batch_size=min(batch_size, 64))
+    a["id"] = f"c5_r5_wave_nat3_tok01_from_ownp50_L4_{cont_steps // 1000}k_g256_b{min(batch_size, 64)}_{_C5_WAVE_512_STORE_TAG}"
+    a["train_steps"] = cont_steps
+    a["lr_horizon_steps"] = cont_steps
+    a["init_checkpoint"] = str(config.REPO_ROOT / "runs" / "checkpoints" / f"{_C5_WAVE_BEST_256}.pt")
+    a["load_optimizer"] = False
+    a["reset_step_counter"] = True
+    a["force_restart"] = True          # with init_checkpoint the harness never auto-resumes: a stopped run starts over
+    a["overrides"].update({"t_train": cont_steps, "learning_rate": cont_lr,
+                           "c5_wave_change_ce_beta": 0.0, "c5_wave_change_ce_beta_schedule": ""})
+    a["notes"] = (f"C5 512 m (a): {_C5_WAVE_BEST_256} continued {cont_steps} steps on Zuid + Centrum 512 m windows "
+                  f"(grid 256 of 2 m, P=16, batch {min(batch_size, 64)}), noise p1, beta 0, cosine from {cont_lr:g}, fresh optimizer")
+
+    b = _c5_wave_512(copy.deepcopy(L4), patch_size=patch_size, batch_size=batch_size)
+    b["overrides"]["enc_n_layer"] = enc_n_layer
+    b["id"] = (f"c5_r5_wave_nat3_tok01_banneal5_noisep1_L{enc_n_layer}{ptag}_{long_steps // 1000}k_g256{btag}"
+               f"_{_C5_WAVE_512_STORE_TAG}")
+    b["notes"] = (L4["notes"].replace("L4", f"L{enc_n_layer}") + f"; 512 m windows on Zuid + Centrum (grid 256 of 2 m, "
+                  f"P={patch_size}, batch {batch_size}), from scratch")
+    return [a, b]
+
+
+def c5_wave_512_cost_variants() -> list[dict]:
+    """The three shapes timed for the 512 m move (smokes only, 4 Oct): L4 P=16 (1024 tokens), L4 P=32 (256 tokens,
+    16 x 16 cells per token), L6 P=16. Each is c5_wave_512_queue()'s spec b with that shape."""
+    return [c5_wave_512_queue(patch_size=16, enc_n_layer=4)[1], c5_wave_512_queue(patch_size=32, enc_n_layer=4)[1],
+            c5_wave_512_queue(patch_size=16, enc_n_layer=6, batch_size=48)[1]]
+
+
+def c5_wave_512_natural_noise_round(source_run: str, round_no: int, cont_steps: int = 16000, p: float = 0.5) -> dict:
+    """512 m, natural noise (4 Oct 2026): continue `source_run` (a network trained at 512 m) on the store of its own
+    drawings over the 20k Zuid + Centrum 512 m train routes (c5_own_pads_train_r{round_no}.npz in c4_512_20k, built with
+    spatial_data/c5_own_pads.py SOURCE --limit 20000 --batch 32 --out ...). Same settings as c5_wave_512_queue()[0].
+    At 256 m this step was worth +14 points free-running, most of it on long routes."""
+    spec = c5_wave_512_queue(cont_steps=cont_steps)[0]
+    spec["id"] = f"c5_r5_wave_nat3_tok01_ownp{int(round(p * 100)):02d}_r{round_no}_L4_{cont_steps // 1000}k_g256_b64_zc512"
+    spec["init_checkpoint"] = str(config.REPO_ROOT / "runs" / "checkpoints" / f"{source_run}.pt")
+    spec["overrides"]["c5_wave_own_pads"] = {"path": f"c5_own_pads_train_r{round_no}.npz", "p": p}
+    spec["notes"] = (f"C5 512 m natural noise round {round_no}: {source_run} continued {cont_steps} steps on its own drawings "
+                     f"(20k routes), p {p}, noise p1, beta 0, cosine from 1e-4, batch 64")
+    return spec
+
+
+_C5_WAVE_BEST_512 = "c5_r5_wave_nat3_tok01_ownp50_r1_L4_16k_g256_b64_zc512"   # natural noise round 1 at 512 m (5 Oct)
+
+
+def c5_wave_cleanup_queue(cont_steps: int = 16000, cont_lr: float = 1e-4, p_own: float = 0.5, p_cleanup: float = 1.0,
+                          draw_fg_weight: float = 1.0, round_512: int = 1) -> list[dict]:
+    """C5 cleanup pass (5 Oct 2026): train the final pass to turn the network's own messy drawing into one sharp line
+    along the shortest route it found (spatial_data/c5_cleanup.py). Both specs continue a natural-noise network as
+    its natural-noise round did (fresh optimizer, cosine from cont_lr, beta 0, token weight 0.1, pad noise p1), with:
+      - draw share raised to one third: wave_fwd / wave_bwd / wave_draw 1 : 1 : 1 (was 4 : 4 : 1)
+      - wave_fwd / wave_bwd: own drawings with probability p_own (c5_wave_own_pads, the teacher's target)
+      - wave_draw: with probability p_cleanup the network's own drawing in and the cleanup target out
+        (c5_wave_cleanup: the 3-wide shortest chain through that drawing when it is a success by the rollout eval's
+        rule, else the teacher's path); the hand-made pad noise hits that input too
+      - wave_draw lit-cell weight draw_fg_weight (c5_wave_fg_weight_override; 1 = calibrated at 0.5, against the
+        over-painting the weight of ~7.5 / 11 rewards; config.c4_fg_weight)
+      a  256 m: _C5_WAVE_BEST_256 continued on c4_100k with its own store c5_own_pads_train_r2.npz and
+         c5_cleanup_train_r2.npz built from it
+      b  512 m: _C5_WAVE_BEST_512 continued on c4_512_20k (batch 64) with c5_own_pads_train_r1.npz and
+         c5_cleanup_train_r1.npz (the r1 store holds the drawings of the network round 1 started from, not of
+         _C5_WAVE_BEST_512 itself: the only 512 m store there is)
+    Read with harness/diagnostics/wave_rollout_eval.py RUN_ID --mode free (cleanliness numbers: final_excess_ratio,
+    final_clean, solved_and_clean; success must not drop)."""
+    ptag = f"ownp{int(round(p_own * 100)):02d}"
+    ctag = f"cleanup{int(round(p_cleanup * 100)):03d}_dw{draw_fg_weight:g}".replace(".", "p")
+
+    def cleanup(spec: dict, round_no: int, what: str) -> dict:
+        spec["overrides"]["c4_train_task_weights"] = [1 / 3, 1 / 3, 1 / 3]
+        spec["overrides"]["c5_wave_cleanup"] = {"path": f"c5_cleanup_train_r{round_no}.npz",
+                                                "own_pads": f"c5_own_pads_train_r{round_no}.npz", "p": p_cleanup}
+        spec["overrides"]["c5_wave_fg_weight_override"] = {"wave_draw": draw_fg_weight}
+        spec["notes"] = (f"C5 cleanup pass {what}: fwd/bwd/draw 1:1:1, own drawings p {p_own} on fwd/bwd (r{round_no}), "
+                         f"cleanup p {p_cleanup} on draw (c5_cleanup_train_r{round_no}.npz), draw lit-cell weight {draw_fg_weight:g}, "
+                         f"noise p1, beta 0, token weight 0.1, cosine from {cont_lr:g}, fresh optimizer, {cont_steps} steps")
+        return spec
+
+    a = c5_wave_natural_noise_round(_C5_WAVE_BEST_256, 2, cont_steps=cont_steps, p=p_own, cont_lr=cont_lr)
+    a = cleanup(a, 2, f"256 m, {_C5_WAVE_BEST_256} continued")
+    a["id"] = f"c5_r5_wave_nat3_tok01_{ctag}_{ptag}_r2_L4_{cont_steps // 1000}k_g128_{_C5_WAVE_STORE_TAG}"
+    b = c5_wave_512_natural_noise_round(_C5_WAVE_BEST_512, round_512, cont_steps=cont_steps, p=p_own)
+    b["overrides"]["learning_rate"] = cont_lr
+    b = cleanup(b, round_512, f"512 m, {_C5_WAVE_BEST_512} continued")   # round_512 = 2: its own drawings (6 Oct)
+    b["id"] = f"c5_r5_wave_nat3_tok01_{ctag}_{ptag}_r{round_512}_L4_{cont_steps // 1000}k_g256_b64_{_C5_WAVE_512_STORE_TAG}"
+    return [a, b]
+
+
+def c5_wave_back_queue() -> list[dict]:
+    """2 Oct 2026: the three backward step types alone (L2 8k, 128x128), then all six mixed at L4 16k (~2.5 h)."""
+    q = {sp["overrides"]["c4_task_keys"][0]: sp for sp in c5_wave_queue()}
+    return [q["wave_back"], q["wave_origin"], q["wave_draw"], c5_wave_mix()]
+
+
+def c5_wave_night_1oct_queue() -> list[dict]:
+    """Night 1 -> 2 Oct 2026 (~5 h): each step type alone at L2 8k 128x128; wave_first also at 64x64 (grid question);
+    wave_first and wave_path at L4 16k; then all four mixed at L4 16k."""
+    # ran 1-2 Oct (ids c5_r5_wave_{first,step,reach,path}_..., c5_r5_wave_mix4_...); wave_path was replaced by the
+    # backward passes on 2 Oct, so this queue is history and returns nothing
+    return []
+
+
+def c5_r0_smoke() -> dict:
+    """R0 gate: load N9 16ch weights into 17ch model, 500 steps; end spatial eval on detour val."""
+    ckpt = config.REPO_ROOT / "runs" / "checkpoints" / "c4n_bld_det_L4_16k_store100k.pt"
+    spec = c5_r0_regression_17ch()
+    spec["id"] = "c5_r0_smoke_500_17ch"
+    spec["train_steps"] = 500
+    spec["lr_horizon_steps"] = 500
+    spec["force_restart"] = True
+    spec["init_checkpoint"] = str(ckpt)
+    spec["load_optimizer"] = False
+    spec["reset_step_counter"] = True
+    spec["notes"] = (
+        "C5 R0 smoke: init N9 (16ch→17ch expand), 500 steps; pass if detour dilated IoU within 0.02 of ~0.813"
+    )
+    spec["spatial_eval"] = {"max_batches": 20, "train_snap_batches": 0}
+    spec["overrides"] = {
+        **spec["overrides"],
+        "eval_interval": 250,
+        "eval_iters": 10,
+        "diagnostics_enabled": False,
+    }
+    return spec
+
+
+def c5_r1_rays_segment_mix() -> dict:
+    """R1: cast rays (marker -> visible building corners within 80 m), trained with the bare segment task,
+    2 blocks, batch 128, 8k. Needs ``c5_fans_{split}.npz`` next to the route store (D2). Val spatial eval
+    uses ``c4_eval_task_key=rays``; segment metrics still in diagnostics / per-task breakdown."""
+    spec = _c4_night_spec(run_id="c5_r1_seg_rays_L2_8k_store100k", keys=["segment", "rays"], weights=[0.5, 0.5],
+                          train_steps=8000, seed=4, c4_routes_subdir="c4_100k", encoding_mode="onehot_v4_sp",
+                          notes="C5 R1: ½ segment + ½ rays, 17ch, 2 blocks, 8k; pass: rays dilated IoU >= 0.85, < 5 % ray cells on buildings")
+    spec["overrides"]["c4_eval_task_key"] = "rays"
+    return spec
+
+
+
+def c5_r2_length_line() -> dict:
+    """R2: length of a straight line on the scratchpad as a token (10 m bins), with the bare segment task.
+    Needs the token head (C5_PLAN M2) and c5_token_targets=True; mask target of length samples = scratchpad copy."""
+    spec = _c4_night_spec(run_id="c5_r2_seg_lenline_L2_8k_store100k", keys=["segment", "length_line"], weights=[0.5, 0.5],
+                          train_steps=8000, seed=4, c4_routes_subdir="c4_100k", encoding_mode="onehot_v4_sp",
+                          c5_token_targets=True, c5_token_head_enabled=True,
+                          notes="C5 R2: ½ segment + ½ length_line, token head; pass: bin accuracy >= 0.8, within one bin >= 0.98, mean error <= 10 m")
+    spec["overrides"]["c4_eval_task_key"] = "length_line"
+    return spec
+
+
+def c5_r3_length_path() -> dict:
+    """R3: length of a polyline on the scratchpad (same token as R2), mixed with the segment and the straight-line length."""
+    spec = _c4_night_spec(run_id="c5_r3_seg_lenline_lenpath_L2_8k_store100k", keys=["segment", "length_line", "length_path"],
+                          weights=[1 / 3, 1 / 3, 1 / 3], train_steps=8000, seed=4, c4_routes_subdir="c4_100k",
+                          encoding_mode="onehot_v4_sp", c5_token_targets=True, c5_token_head_enabled=True,
+                          notes="C5 R3: ⅓ segment + ⅓ length_line + ⅓ length_path; pass as R2 on length_path")
+    spec["overrides"]["c4_eval_task_key"] = "length_path"
+    return spec
+
+
+def c5_rung23_run_queue() -> list[dict]:
+    return [c5_r2_length_line(), c5_r3_length_path()]
+
+
+def c5_r4_tighten() -> dict:
+    """R4: pull the loose path on the scratchpad tight around the buildings (target = stored tight path), with the bare
+    segment task; 2 blocks, 8k. Pass: output length / taut length <= 1.05 on >= 90 % of samples, no building cells."""
+    spec = _c4_night_spec(run_id="c5_r4_seg_tighten_L2_8k_store100k", keys=["segment", "tighten"], weights=[0.5, 0.5],
+                          train_steps=8000, seed=4, c4_routes_subdir="c4_100k", encoding_mode="onehot_v4_sp",
+                          notes="C5 R4: ½ segment + ½ tighten, 17 channels, 2 blocks, 8k")
+    spec["overrides"]["c4_eval_task_key"] = "tighten"
+    return spec
+
+def c5_rung1_run_queue() -> list[dict]:
+    return [c5_r1_rays_segment_mix(), c5_r0_regression_17ch()]
+
+
+def c5_rung01_run_queue() -> list[dict]:
+    """C5_PLAN §6: R0 regression (17ch, N9 warm-start) then R1 rays+segment."""
+    return [
+        _c5_warmstart_n9_if_fresh(c5_r0_regression_17ch()),
+        c5_r1_rays_segment_mix(),
+    ]
+
+
+def c5_resume_after_r0_run_queue() -> list[dict]:
+    """R0 complete: R1 → R2 → R3 → R4 (harness auto-resumes partial runs)."""
+    return [c5_r1_rays_segment_mix(), *c5_rung23_run_queue(), c5_r4_tighten()]
+
+
+def c5_harness_run_queue() -> list[dict]:
+    """Ordered C5 work left on the harness (finished ids skipped automatically).
+
+    Done 29 Sep 2026: R0, R0a, R1b (g64 + g128), R2b, R3b on De Pijp 100k.
+    Next: R0b 512 m window on Zuid+Centrum (8k smoke, ~90 min @ 3060), then R4 tighten."""
+    return [
+        c5_r0b_window512(),
+        c5_r4_tighten(),
+    ]
+
+
+_C5_ONESHOT_256_ID = "c5_os_bld_det_L4_64k_g128_store100k"
+
+
+def c5_oneshot_matched_queue(steps_256: int = 64000, steps_512: int = 32000, cont_lr_512: float = 1e-4,
+                             loss: str = "ce_dice") -> list[dict]:
+    """One-shot path finding with the search's budget (5 Oct 2026), so the comparison is method against method and
+    not a 16k one-shot run against a 64k search. Scored with diagnostics/oneshot_route_eval.py, which applies the
+    search's success rule (route_score) to the one-shot mask; pictures with diagnostics/showcase_compare.py.
+      a  256 m: the best one-shot recipe (C4 report §7.2, N9: ½ building + ½ detour, 4 blocks, CE + Dice, 100k store)
+         in the C5 setup of R0a (17 channels with an empty scratchpad, patch 16, output 128 x 128 = 2 m cells, the
+         search's cell size), De Pijp c4_100k with all 100k train routes, batch 128, cosine over steps_256 from scratch.
+         64k = the search network's 48k + 16k. Why this loss: CE + Dice is what every one-shot detour run used, and N9
+         was the best of the mix probe (0.813 dilated against 0.799 for the detour alone; the building helper is neutral
+         to slightly positive without the segment). The search's own loss (plain CE with the lit-cell weight, beta on
+         changed cells) was tuned for a scratchpad that changes a little per pass; no report compares it with CE + Dice
+         on a one-shot path, so it is not queued; loss="ce" builds that variant if wanted.
+      b  512 m: (a) continued at 512 m windows on Zuid + Centrum c4_512_20k (512 px, output 256 x 256 = 2 m cells,
+         P=16, 1024 tokens, batch 64), steps_512 steps, fresh optimizer, cosine from cont_lr_512, as the 512 m search
+         was continued from the 256 m search (c5_wave_512_queue()[0], 16k, then 16k on its own drawings = 32k at
+         512 m). The weights transfer the same way: no learned weight depends on the number of patches (sin-cos
+         positions and the relative-bias table are rebuilt for 32 x 32 patches, the bias is per clipped offset, the
+         grid head maps one patch to its 8 x 8 cells at both sizes). Needs (a)'s final checkpoint. cont_lr 1e-4 copies
+         the search's continuation; a one-shot model has more to relearn at 512 m (routes up to ~1.1 km walking against
+         ~300 m), so a higher rate is a fair alternative (an open choice).
+    Matched budget, not matched presentations: half of the one-shot samples are the building helper, while every
+    search sample is a search pass. Cost (L4, measured): 256 m ~700 samples/s -> 64k x 128 ~3.3 h model time (R0a's
+    16k took 55 min with evals, i.e. ~3.7 h for 64k); 512 m b64 ~116 samples/s -> 32k x 64 ~4.9 h."""
+    import copy
+    a = c5_r0a_grid128()
+    a["id"] = _C5_ONESHOT_256_ID + ("" if loss == "ce_dice" else f"_{loss}")
+    a["train_steps"] = steps_256
+    a["lr_horizon_steps"] = steps_256
+    a["overrides"]["c4_grid_loss"] = loss
+    a["notes"] = (f"C5 one-shot matched to the search's budget: N9 recipe (½ building + ½ detour, L4, {loss}), 17ch, grid 128 "
+                  f"(2 m), De Pijp c4_100k, batch 128, cosine {steps_256} steps from scratch")
+
+    b = _c5_wave_512(copy.deepcopy(a), patch_size=16, batch_size=64)
+    b["id"] = (f"c5_os_bld_det_from{steps_256 // 1000}k_L4_{steps_512 // 1000}k_g256_b64_zc512"
+               + ("" if loss == "ce_dice" else f"_{loss}"))
+    b["train_steps"] = steps_512
+    b["lr_horizon_steps"] = steps_512
+    b["init_checkpoint"] = str(config.REPO_ROOT / "runs" / "checkpoints" / f"{a['id']}.pt")
+    b["load_optimizer"] = False
+    b["reset_step_counter"] = True
+    b["force_restart"] = True          # with init_checkpoint the harness never auto-resumes: a stopped run starts over
+    b["overrides"]["learning_rate"] = cont_lr_512
+    b["notes"] = (f"C5 one-shot matched, 512 m: {a['id']} continued {steps_512} steps on Zuid + Centrum 512 m windows "
+                  f"(grid 256 of 2 m, P=16, batch 64), cosine from {cont_lr_512:g}, fresh optimizer")
+    return [a, b]
+
+
+def _no_compile(spec: dict) -> dict:
+    """torch.compile off for one spec (the 512 m one-shot model hit an Inductor assertion at its first step, 6 Oct)."""
+    spec["overrides"]["use_compile"] = False
+    return spec
+
+
 RUN: list[dict] = [
+    # Queue of 6 Oct (about 12 h; smoke-tested before launch): cleanup pass and budget-matched one-shot, 256 m then 512 m.
+    # c5_wave_cleanup_queue()[0],        -- done 6 Oct # 1  cleanup pass at 256 m: continue the best 256 m network 16k (~1 h)
+    # c5_oneshot_matched_queue()[0],     -- done 6 Oct # 2  one-shot detour, 256 m, 64k from scratch (~3.5 h)
+    # 6 Oct, after run 1: draw weight 1.0 thins the line but breaks it (success 74 % before the draw pass, 56 % after);
+    # weight 3 next, 256 m first (1 h) so the answer is early, 512 m on its own round-2 drawings last.
+    # c5_wave_cleanup_queue(draw_fg_weight=3.0)[0],                   # cleanup 256 m, draw weight 3 (~1 h)  -- done 6 Oct 12:50
+    _no_compile(c5_oneshot_matched_queue()[1]),                     # one-shot continued at 512 m, 32k (~5.5 h); compile off: Inductor assertion at step 0 (6 Oct)
+    c5_wave_cleanup_queue(draw_fg_weight=3.0, round_512=2)[1],      # cleanup 512 m, draw weight 3, r2 drawings (~2.6 h)
+    # c5_wave_cleanup_queue()[1],  -- not run: draw weight 1.0 (see run 1)
+    # c5_wave_512_natural_noise_round("c5_r5_wave_nat3_tok01_from_ownp50_L4_16k_g256_b64_zc512", 1),  # 5 Oct: natural noise at 512 m (needs c5_own_pads_train_r1.npz in c4_512_20k)  -- done 5 Oct: 512 m val 32 -> 42 % (6-8 fronts 33 -> 53 %), maze 512 40 -> 39 %
+    # c5_wave_512_queue()[0],  # done 4 Oct: 512 m val 32 % solved (91 / 65 / 33 / 18 / 2 % by fronts 2-3 / 4-5 / 6-8 / 9-12 / 13+)
+    # c5_wave_natural_noise_round("c5_r5_wave_nat3_tok01_ownp50_from48k_L4_16k_g128_store100k", 2),  # 4 Oct: round 2 (needs c5_own_pads_train_r2.npz)  -- done: round 2 adds little (80 / 71 / 60 %)
+    # *c5_wave_512_queue(),  # 4 Oct, prepared, not run: 512 m windows (Zuid + Centrum c4_512_20k, grid 256, P=16, batch 64): (a) best 256 m net continued 16k, (b) from scratch 48k (~6.3 h)
+    # *c5_wave_own_pads_queue(cont_lr=1e-4),  # done 4 Oct: (a) 78 % / (b) 75 % on De Pijp val 500 (baseline 64 %)
+    # *c5_wave_night_queue_2oct(),  # done: night 2/3 Oct: bwd2 x3 (token weight 0.1) then the whole search L4 / L2 48k
+    # *c5_wave_back_counter_queue3(),  # done @7999: token loss weight 0 / 0.1 brings the mix back (180 -> 88 / 98 false cells)
+    # *c5_wave_back_counter_queue2(),  # done @7999: reference reproduces; flat lr is not it; the mix with origin is
+    # *c5_wave_back_counter_queue(),  # done @7999: A Dice+noise / B CE no noise / C CE+noise; none reproduces the blob
+    # *c5_wave_bwd2_L4_p16_noisep1_ablation_queue(16000),  # done @15999 (store100k, banneal5 + plain)
+    # *c5_wave_fwd3_L4_p16_100k_ablation_queue(16000),  # fwd — cancelled; use bwd2 ablation
+    # *c5_wave_fwd3_anneal_l2_p16_p64_noisep1_queue(16000),  # done store40k
+    # *c5_wave_bwd2_anneal_noisep1_queue(16000),  # done store40k (L2/L2p32/L4p32)
+    # *c5_wave_fwd3_anneal_p32_noise_queue(16000),  # done @15999
+    # *c5_wave_fwd3_anneal_followup_queue(16000),  # p32, L2 anneal done; noisep1 L4 finish separately
+    # c5_wave_fwd3_banneal5_noisep1(16000),  # in flight — do not re-queue until @16k
+    # c5_wave_fwd3_beta2_L2_staple(16000),  # done — plain L2; anneal is the key
+    # c5_wave_fwd3_plain(16000),  # done @15999
+    # c5_wave_fwd3_beta_thirds_decay(16000, beta_high=5.0),  # done @15999 (ce fix)
+    # c5_wave_mix_forward3_beta(train_steps=12000, beta=5.0),
+    # *c5_wave_change_fwd_beta_lrflat_12k_queue((2.0, 5.0)),
+    # c5_wave_compile_smoke(use_compile_dynamic=False),  # passed 1 Oct ~131s
+    # c5_wave_compile_smoke(use_compile_dynamic=True),   # passed 1 Oct ~236s (slower)
+    # *c5_wave_change_fwd_beta_explore_12k_queue((2.0, 5.0, 10.0)),
+    # *c5_wave_change_fwd_beta_queue((2.0, 5.0)),
+    # *c5_wave_change_fwd4k_queue(),
+    # *c5_wave_change_ce_queue(),
+    # c5_wave_change_ce_smoke(),
+    # *c5_wave_half_duration_queue(8000),
+    # c5_wave_mix_step_back(),  # (iii) defer until half-duration gate passes
+    # *c5_wave_ablation_queue(),  # 4k probe done: fwd step new ~0.03, bwd partial — not enough steps
+    # c5_wave_mix(),  # mix6 done @16k — see wave_eval_dashboard.png
+    # *c5_wave_back_queue(),  # back+origin done @8k; draw stopped early @1k (strip looked good)
+    # *c5_r1d_traj_one_run_queue(),
+    # *c5_wave_night_1oct_queue(),  # done 1-2 Oct (forward singles + mix4 aborted)
+    # *c5_overnight_30sep_queue(),  # done 30 Sep night
+    # *c5_harness_run_queue(),  # R0b is in the overnight queue; R4 tighten already done
+    # *c5_rerun_queue(),  # R1b–R3b done 29 Sep 2026
+    # c5_r0a_grid128(),  # resolution test A — done
+    # *c5_resume_after_r0_run_queue(),  # old R1–R4 task recipe (29 Sep morning)
+    # *c5_rung01_run_queue(),  # R0 done 29 Sep 2026
+    # c5_r0_smoke(),
     # *m1_report_79_run_queue(),
     # *c4_overnight_run_queue(),
     # *c4_l4_store100k_run_queue(),
-    *c4_mix_probe_run_queue(),
+    # *c4_mix_probe_run_queue(),
     # done 25 Sep: c4a/c4b 4k explore — see docs/reports/C4_SEGMENT_DETOUR_2026-09-25.md
     # *c4_c4a_explore_run_queue(),
     # *c4_c4b_run_queue(),

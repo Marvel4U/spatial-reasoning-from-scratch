@@ -4,7 +4,7 @@ import sys, glob, json
 from pathlib import Path
 import numpy as np
 
-REPO = Path(__file__).resolve().parents[3] if "perf_prototypes" in __file__ else Path.home() / "Github/spatial_reasoning_LLM_artifact"
+REPO = Path(__file__).resolve().parents[3]
 ddir = REPO / "data/amsterdam/de_pijp"
 sys.path.insert(0, str(REPO))
 from spatial_data.c3_markers import marker_table_for_split

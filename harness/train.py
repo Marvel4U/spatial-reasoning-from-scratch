@@ -5,10 +5,10 @@ import argparse
 import time
 from pathlib import Path
 
+import config  # PYTORCH_CUDA_ALLOC_CONF before torch
+
 print("train.py: loading torch …", flush=True)
 import torch
-
-import config
 import data
 import experiments
 import grid_vit_adapter
@@ -60,15 +60,17 @@ def main():
 
     config.log(f"  forward smoke batch_size={config.batch_size} …")
     t3 = time.perf_counter()
-    img, tgt, task_id, cond_ids = loader_next_batch(data.train_loader)
+    img, tgt, task_id, cond_ids, tok_tgt = loader_next_batch(data.train_loader)
     config.log(f"  batch shapes img={tuple(img.shape)} tgt={tuple(tgt.shape)}")
     img, tgt = img.to(data.device), tgt.to(data.device)
     if task_id is not None:
         task_id = task_id.to(data.device)
     if cond_ids is not None:
         cond_ids = cond_ids.to(data.device)
+    if tok_tgt is not None:
+        tok_tgt = tok_tgt.to(data.device)
     with data.ctx:
-        _, loss = model_forward(model, img, tgt, task_id, cond_ids)
+        _, loss = model_forward(model, img, tgt, task_id, cond_ids, tok_tgt)
     if device_sync := str(data.device).startswith("cuda"):
         torch.cuda.synchronize()
     config.log(f"  smoke forward loss={loss.item():.4f} (+{time.perf_counter() - t3:.2f}s)")

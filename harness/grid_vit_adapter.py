@@ -17,6 +17,7 @@ if str(config.REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(config.REPO_ROOT))
 
 from plain_gpt_module import get_lr, load_checkpoint as _load_checkpoint, save_checkpoint as _save_checkpoint, unwrap_compiled
+from plain_gpt_module.wave_beta_schedule import beta_thirds_decay
 from plain_gpt_module.checkpoint import read_checkpoint
 from plain_gpt_module.local_config import LocalGridViTConfig
 from plain_gpt_module.local_grid_vit import LocalGridViT
@@ -27,6 +28,29 @@ WEIGHT_DECAY = 0.1
 WARMUP_STEPS = 10
 GRAD_CLIP = 1.0
 MIN_LR_RATIO = 0.1
+
+
+def _apply_c5_wave_beta_schedule(model, step: int) -> None:
+    sched = (getattr(config, "c5_wave_change_ce_beta_schedule", "") or "").strip()
+    if not sched:
+        return
+    total = int(getattr(config, "t_train", 0) or 0)
+    if total <= 0:
+        return
+    high = float(getattr(config, "c5_wave_change_ce_beta_high", config.c5_wave_change_ce_beta))
+    if sched == "thirds_decay":
+        beta = beta_thirds_decay(step, total, beta_high=high)
+    else:
+        raise ValueError(f"unknown c5_wave_change_ce_beta_schedule: {sched!r}")
+    config.c5_wave_change_ce_beta = beta
+    unwrap_compiled(model).config.wave_change_ce_beta = beta
+    prev = getattr(_apply_c5_wave_beta_schedule, "_last_logged_beta", None)
+    if prev != beta and (step == 0 or step % max(1, int(config.eval_interval)) == 0):
+        config.log(
+            f"  c5_wave_change_ce_beta={beta:.4g} (schedule={sched}, step={step}, t_train={total})",
+            force=True,
+        )
+        _apply_c5_wave_beta_schedule._last_logged_beta = beta
 
 
 def throughput_between_evals(train_steps: int, seconds: float) -> dict[str, float]:
@@ -58,6 +82,31 @@ def model_config() -> LocalGridViTConfig:
     return LocalGridViTConfig(**config.local_grid_vit_config_dict())
 
 
+def _compile_dynamic_arg():
+    if not hasattr(config, "use_compile_dynamic"):
+        return None
+    return config.use_compile_dynamic
+
+
+def _configure_dynamo_for_compile():
+    import torch._dynamo
+
+    limit = getattr(config, "use_compile_dynamo_cache_size_limit", None)
+    if limit is not None:
+        want = int(limit)
+        if torch._dynamo.config.cache_size_limit < want:
+            torch._dynamo.config.cache_size_limit = want
+            config.log(f"  dynamo cache_size_limit → {want} (debug recompiles: TORCH_LOGS=recompiles)")
+
+
+def _maybe_compile(model):
+    _configure_dynamo_for_compile()
+    dynamic = _compile_dynamic_arg()
+    if dynamic is None:
+        return torch.compile(model)
+    return torch.compile(model, dynamic=dynamic)
+
+
 def build_model(device=None, use_compile=None):
     device = device or data.device
     if use_compile is None:
@@ -74,9 +123,10 @@ def build_model(device=None, use_compile=None):
     n_params = sum(p.numel() for p in model.parameters())
     config.log(f"  on {device}, params={n_params:,}")
     if use_compile and str(device).startswith("cuda"):
-        config.log("  torch.compile … (first forward can take minutes)")
+        dynamic = _compile_dynamic_arg()
+        config.log(f"  torch.compile … dynamic={dynamic!r} (first forward can take minutes)")
         t1 = time.perf_counter()
-        model = torch.compile(model, dynamic=True)
+        model = _maybe_compile(model)
         config.log(f"  compile wrapper ready ({time.perf_counter() - t1:.2f}s)")
     return model
 
@@ -177,7 +227,7 @@ def load_checkpoint(path, model=None, optimizer=None):
         cfg_dict = checkpoint_model_config(ckpt)
         model = LocalGridViT(LocalGridViTConfig(**cfg_dict))
         if config.use_compile and str(data.device).startswith("cuda"):
-            model = torch.compile(model, dynamic=True)
+            model = _maybe_compile(model)
     _load_checkpoint(path, model, optimizer=optimizer, map_location=data.device)
     model.to(data.device)
     data.m = model
@@ -209,14 +259,16 @@ def estimate_loss(model, eval_iters=None, *, include_val: bool | None = None):
         loader = loaders[split]
         losses = torch.zeros(iters)
         for k in range(iters):
-            img, tgt, task_id, cond_ids = loader_next_batch(loader)
+            img, tgt, task_id, cond_ids, tok_tgt = loader_next_batch(loader)
             img, tgt = img.to(device), tgt.to(device)
             if task_id is not None:
                 task_id = task_id.to(device)
             if cond_ids is not None:
                 cond_ids = cond_ids.to(device)
+            if tok_tgt is not None:
+                tok_tgt = tok_tgt.to(device)
             with torch.autocast(device_type=device_type, dtype=data.dtype):
-                _, loss = model_forward(model, img, tgt, task_id, cond_ids)
+                _, loss = model_forward(model, img, tgt, task_id, cond_ids, tok_tgt)
             losses[k] = loss.item()
         out[split] = losses.mean().item()
     if not include_val:
@@ -322,15 +374,21 @@ def train(
         if rec:
             _sync_device(device)
         t_step = time.perf_counter()
-        img, tgt, task_id, cond_ids = loader_next_batch(loader)
+        if getattr(loader, "own_pads", None) is not None:      # C5 own pads: switched on at their start step
+            from spatial_data.c5_own_pads import set_own_pads_step
+            set_own_pads_step(loader.own_pads, step)
+        img, tgt, task_id, cond_ids, tok_tgt = loader_next_batch(loader)
         t_after_batch = time.perf_counter()
         img, tgt = img.to(device), tgt.to(device)
         if task_id is not None:
             task_id = task_id.to(device)
         if cond_ids is not None:
             cond_ids = cond_ids.to(device)
+        if tok_tgt is not None:
+            tok_tgt = tok_tgt.to(device)
+        _apply_c5_wave_beta_schedule(model, step)
         with torch.autocast(device_type=device_type, dtype=data.dtype):
-            _, loss = model_forward(model, img, tgt, task_id, cond_ids)
+            _, loss = model_forward(model, img, tgt, task_id, cond_ids, tok_tgt)
         loss.backward()
         pre_clip = tier1.collect_pre_clip(model) if rec else None
         grad_norm_total = torch.nn.utils.clip_grad_norm_(model.parameters(), float(getattr(config, "grad_clip", GRAD_CLIP)))

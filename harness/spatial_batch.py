@@ -6,14 +6,16 @@ import torch
 
 def next_batch(
     loader,
-) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor | None]:
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor | None, torch.Tensor | None, torch.Tensor | None]:
     batch = loader.next_batch()
+    if len(batch) == 5:
+        return batch[0], batch[1], batch[2], batch[3], batch[4]
     if len(batch) == 4:
-        return batch[0], batch[1], batch[2], batch[3]
+        return batch[0], batch[1], batch[2], batch[3], None
     if len(batch) == 3:
-        return batch[0], batch[1], batch[2], None
+        return batch[0], batch[1], batch[2], None, None
     img, tgt = batch
-    return img, tgt, None, None
+    return img, tgt, None, None, None
 
 
 def forward(
@@ -22,6 +24,7 @@ def forward(
     tgt,
     task_id: torch.Tensor | None = None,
     cond_ids: torch.Tensor | None = None,
+    tok_tgt: torch.Tensor | None = None,
     *,
     encoder_self_attn_only: bool = False,
     encoder_patch_local_only: bool = False,
@@ -34,10 +37,12 @@ def forward(
         kw["task_id"] = task_id
     if cond_ids is not None:
         kw["cond_ids"] = cond_ids
-    if tgt is None and task_id is None and cond_ids is None and not encoder_self_attn_only:
+    if tok_tgt is not None:
+        kw["tok_tgt"] = tok_tgt
+    if tgt is None and task_id is None and cond_ids is None and tok_tgt is None and not encoder_self_attn_only:
         return model(img, None)
     if tgt is None:
         return model(img, None, **kw)
-    if task_id is None and cond_ids is None and not encoder_self_attn_only:
+    if task_id is None and cond_ids is None and tok_tgt is None and not encoder_self_attn_only:
         return model(img, tgt)
     return model(img, tgt, **kw)

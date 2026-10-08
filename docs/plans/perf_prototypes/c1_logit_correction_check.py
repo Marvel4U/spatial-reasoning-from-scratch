@@ -6,7 +6,7 @@ import sys, os, glob, math
 from pathlib import Path
 import numpy as np, torch
 
-REPO = Path(__file__).resolve().parents[3] if "perf_prototypes" in __file__ else Path.home() / "Github/spatial_reasoning_LLM_artifact"
+REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
 from plain_gpt_module.local_grid_vit import LocalGridViT
 from plain_gpt_module.local_config import LocalGridViTConfig

@@ -48,7 +48,7 @@ Each phase ends **shippable** (artifact + honest pass/fail). Do not start phase 
 
 1. **Smoke store** (already supported by CLI):
    ```bash
-   cd ~/Github/spatial_reasoning_LLM_artifact
+   cd <repository root>
    python -m spatial_data.c4_routes --n-train 200 --n-val 50 --n-test 50 --overlays 8 \
      --out data/amsterdam/de_pijp/crops/v4/c4
    ```

@@ -1,7 +1,7 @@
 """Mix checkpoints: under the m1 token, share of food&drink cells marked inside vs outside the 100 m disc."""
 import sys, os, json
 from pathlib import Path
-REPO = Path.home() / "Github/spatial_reasoning_LLM_artifact"
+REPO = Path(__file__).resolve().parents[3]
 os.chdir(REPO / "harness"); sys.path.insert(0, str(REPO / "harness")); sys.path.insert(0, str(REPO))
 import torch, config
 RUN = sys.argv[1]

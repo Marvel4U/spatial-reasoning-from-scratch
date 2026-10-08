@@ -81,6 +81,7 @@ class ProbeBatch:
     pred_indices: list[int]
     task_ids: torch.Tensor | None = None
     cond_ids: torch.Tensor | None = None
+    tok_tgt: torch.Tensor | None = None   # C5 length token per probe sample, -1 = none
 
     @classmethod
     def build(cls, device: torch.device | None = None) -> ProbeBatch:
@@ -158,6 +159,7 @@ class ProbeBatch:
         base_seed = config.diagnostics_probe_seed
         n_val = len(val_loader)
         imgs, tgts, mrs, mcs, tids, cids, rng_indices = [], [], [], [], [], [], []
+        toks = []
         for slot in range(n_probe):
             flat_ix = (base_seed * 997 + slot * 17) % n_val
             img1, tgt1, tid1, cid1, meta = val_loader.fetch_at(flat_ix)
@@ -168,17 +170,22 @@ class ProbeBatch:
             mrs.append(int(mk[0, 1]))
             tids.append(int(tid1.item()))
             cids.append(cid1.cpu().tolist())
-            rng_indices.append(flat_ix)
+            ri = meta.get("route_ix")
+            rng_indices.append(int(ri.view(-1)[0].item()) if ri is not None else flat_ix)
+            tk = meta.get("tok_tgt")
+            toks.append(int(tk.view(-1)[0].item()) if tk is not None else -1)
         img = torch.stack(imgs).to(device)
         tgt = torch.stack(tgts).to(device)
+        pred_indices = _c4_pred_strip_indices(toks, n_probe, n_pred)
         return cls(
             img=img, tgt=tgt,
             marker_row=torch.tensor(mrs, device=device, dtype=torch.long),
             marker_col=torch.tensor(mcs, device=device, dtype=torch.long),
             item_indices=rng_indices,
-            pred_indices=list(range(n_pred)),
+            pred_indices=pred_indices,
             task_ids=torch.tensor(tids, device=device, dtype=torch.long),
             cond_ids=torch.tensor(cids, device=device, dtype=torch.long),
+            tok_tgt=torch.tensor(toks, device=device, dtype=torch.long),
         )
 
     def marker_token_indices(self, cfg) -> torch.Tensor:
@@ -192,7 +199,7 @@ class ProbeBatch:
         g = cfg.img_size // cfg.patch_size
         pr = self.marker_row // cfg.patch_size
         pc = self.marker_col // cfg.patch_size
-        n_prefix = int(getattr(cfg, "n_cond_token_slots", 0))
+        n_prefix = int(getattr(cfg, "n_prefix_tokens", getattr(cfg, "n_cond_token_slots", 0)))
         return (pr * g + pc + n_prefix).long()
 
     def update_meta(self, meta_path: Path) -> None:
@@ -202,3 +209,25 @@ class ProbeBatch:
         doc["probe_sample_ids"] = self.item_indices
         doc["pred_sample_ids"] = [self.item_indices[i] for i in self.pred_indices]
         meta_path.write_text(json.dumps(doc, indent=2) + "\n", encoding="utf-8")
+
+
+def _c4_pred_strip_indices(toks: list[int], n_probe: int, n_pred: int) -> list[int]:
+    """Pick strip rows: half mask CE rows, half length-token rows when both exist."""
+    length_ix = [i for i, t in enumerate(toks) if t >= 0]
+    mask_ix = [i for i, t in enumerate(toks) if t < 0]
+    out: list[int] = []
+    if length_ix and mask_ix:
+        n_mask = min(len(mask_ix), max(1, n_pred // 2))
+        n_len = min(len(length_ix), n_pred - n_mask)
+        n_mask = min(len(mask_ix), n_pred - n_len)
+        out = mask_ix[:n_mask] + length_ix[:n_len]
+    elif length_ix:
+        out = length_ix[:n_pred]
+    else:
+        out = mask_ix[:n_pred]
+    for i in range(n_probe):
+        if len(out) >= n_pred:
+            break
+        if i not in out:
+            out.append(i)
+    return out[:n_pred]

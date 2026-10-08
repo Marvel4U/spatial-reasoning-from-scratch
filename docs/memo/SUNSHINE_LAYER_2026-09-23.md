@@ -158,7 +158,7 @@ stored). `split.json`, `index.jsonl` and the transforms JSON are identical;
 ## 7. How to regenerate
 
 ```bash
-cd ~/Github/spatial_reasoning_LLM_artifact
+cd <repository root>
 .venv/bin/python -m pytest tests/test_sun.py -s          # almanac + shadow-direction checks
 .venv/bin/python -m worldsnap.build --district de_pijp --layers sunshine   # ~40 s, GPU
 .venv/bin/python -m worldsnap.crops --district de_pijp --cropset v4 \

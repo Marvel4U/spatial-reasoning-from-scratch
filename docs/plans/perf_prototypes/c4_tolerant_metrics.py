@@ -1,7 +1,7 @@
 """c4 val: plain IoU vs 1-cell-tolerant metrics for thin-line targets."""
 import sys, os, json
 from pathlib import Path
-REPO = Path.home() / "Github/spatial_reasoning_LLM_artifact"
+REPO = Path(__file__).resolve().parents[3]
 os.chdir(REPO / "harness"); sys.path.insert(0, str(REPO / "harness")); sys.path.insert(0, str(REPO))
 import torch, torch.nn.functional as F, config
 RUN = sys.argv[1]

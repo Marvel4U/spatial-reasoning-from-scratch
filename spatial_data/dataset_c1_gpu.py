@@ -71,8 +71,12 @@ def build_image_from_crops(
     *,
     marker_col: torch.Tensor | None = None,
     marker_row: torch.Tensor | None = None,
+    scratch: torch.Tensor | None = None,
 ) -> torch.Tensor:
     """(B,3,H,W) uint8 class planes -> model input (B,C,H,W) float.
+
+    ``onehot_v4_sp`` (C5_PLAN): the 16 onehot_v4 channels plus a scratchpad plane at channel 16,
+    filled from ``scratch`` (B,H,W) when given, zero otherwise. The marker stays at channel 15.
 
     Split out of build_batch_from_crops so the c2 loader builds the identical input
     (the extra plane stays zero: c1/c2 have no marker, but in_chans must not change).
@@ -87,13 +91,16 @@ def build_image_from_crops(
         for li in range(3):
             pl = layers_u8[:, li].long()
             img[:, li * 4 : (li + 1) * 4] = F.one_hot(pl, NUM_CLASSES_PER_LAYER).permute(0, 3, 1, 2).float()
-    elif encoding == "onehot_v4":
-        img = torch.zeros(b, 16, h, w, device=st_dev, dtype=torch.float32)
+    elif encoding in ("onehot_v4", "onehot_v4_sp"):
+        img = torch.zeros(b, 17 if encoding == "onehot_v4_sp" else 16, h, w, device=st_dev, dtype=torch.float32)
         img[:, :7] = F.one_hot(layers_u8[:, 0].long(), NUM_NOISE7_CLASSES).permute(0, 3, 1, 2).float()
         img[:, 7:11] = F.one_hot(layers_u8[:, 1].long(), NUM_CLASSES_PER_LAYER).permute(0, 3, 1, 2).float()
         img[:, 11:15] = F.one_hot(layers_u8[:, 2].long(), NUM_CLASSES_PER_LAYER).permute(0, 3, 1, 2).float()
     else:
         raise ValueError(encoding)
+    mch = 15 if encoding in ("onehot_v4", "onehot_v4_sp") else img.shape[1] - 1   # marker plane index
+    if encoding == "onehot_v4_sp" and scratch is not None:
+        img[:, 16] = scratch.to(device=img.device, dtype=img.dtype)
     if marker_col is not None and marker_row is not None:
         mc = marker_col.view(b, -1)  # (B,) or (B,K); -1 = unused slot
         mr = marker_row.view(b, -1)
@@ -104,14 +111,14 @@ def build_image_from_crops(
         radius = int(_ch.MARKER_RADIUS_PX)  # read at call time: harness/data.py overrides it
         if radius <= 0:
             bi = torch.arange(b, device=img.device).view(b, 1).expand_as(mc)
-            img[bi[ok], -1, mr[ok], mc[ok]] = 1.0
+            img[bi[ok], mch, mr[ok], mc[ok]] = 1.0
         else:
             yy = torch.arange(h, device=img.device).view(1, 1, h, 1)
             xx = torch.arange(w, device=img.device).view(1, 1, 1, w)
             cy = mr.view(b, -1, 1, 1); cx = mc.view(b, -1, 1, 1)
             disc = ((yy - cy) ** 2 + (xx - cx) ** 2) <= radius * radius   # (B,K,H,W)
             disc = disc & ok.view(b, -1, 1, 1)
-            img[:, -1] = torch.maximum(img[:, -1], disc.any(dim=1).float())
+            img[:, mch] = torch.maximum(img[:, mch], disc.any(dim=1).float())
     return img
 
 

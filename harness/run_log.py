@@ -10,7 +10,8 @@ from eval_spatial import spatial_summary_for_run_log
 CONFIG_KEYS = (
     "batch_size", "t_train", "eval_interval", "eval_iters", "eval_iters_final",
     "learning_rate", "n_embd", "h_heads", "enc_n_layer", "dropout", "seed", "use_gpu",
-    "use_compile", "in_chans", "img_size", "patch_size", "grid_out_size",
+    "use_compile", "use_compile_dynamic", "use_compile_dynamo_cache_size_limit",
+    "in_chans", "img_size", "patch_size", "grid_out_size",
     "num_grid_classes", "encoding_mode", "pos_temperature", "task_rung",
     "data_source", "cropset", "taskset", "encoding_mode",
     "synthetic_train_samples", "synthetic_val_samples", "val_same_as_train",
@@ -19,12 +20,15 @@ CONFIG_KEYS = (
     "district_city", "district_name",
     "diagnostics_enabled", "diagnostics_interval", "diagnostics_record_step0",
     "diagnostics_eval_interval",
+    "c5_wave_change_ce_beta_schedule", "c5_wave_change_ce_beta_high",
     "diagnostics_probe_enabled", "diagnostics_probe_batch_size", "diagnostics_pred_samples",
     "diagnostics_pred_enabled", "diagnostics_checkpoint_steps",
 )
 RESUME_SKIP_CONFIG_KEYS = frozenset({
     "t_train",
     "eval_interval",
+    "use_compile",  # eager→compile resume: same weights, wrapper only
+    "use_compile_dynamic",
     # diagnostics / logging — must not invalidate resume after JSON round-trip or toggles
     "diagnostics_enabled",
     "diagnostics_interval",

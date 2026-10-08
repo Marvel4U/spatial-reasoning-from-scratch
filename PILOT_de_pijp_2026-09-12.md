@@ -2,7 +2,7 @@
 
 Purpose: prove that a frozen, local, per-layer "world snapshot" of a real district can be built from open data with no keys, no cleaning, and a per-layer manifest, and that every layer is real, aligned, and visually plausible. Seven layers, all done. No tasks, no model, no training code.
 
-Where: rig `~/Github/spatial_reasoning_LLM_artifact/` — code `worldsnap/` (~4.7k lines incl. long docstrings), data `data/amsterdam/de_pijp/` (418 MB incl. raw archives), overlays in `.../overlays/`, manifest `.../manifest.json`. CLI: `.venv/bin/python -m worldsnap.build --district de_pijp --layers <names>`. Bbox: lon 4.884–4.910, lat 52.345–52.361 (3.196 km²), EPSG:28992 storage.
+Where: the repository root — code `worldsnap/` (~4.7k lines incl. long docstrings), data `data/amsterdam/de_pijp/` (418 MB incl. raw archives), overlays in `.../overlays/`, manifest `.../manifest.json`. CLI: `.venv/bin/python -m worldsnap.build --district de_pijp --layers <names>`. Bbox: lon 4.884–4.910, lat 52.345–52.361 (3.196 km²), EPSG:28992 storage.
 
 ## Layers
 

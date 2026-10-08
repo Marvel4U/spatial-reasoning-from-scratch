@@ -99,4 +99,20 @@ DE_PIJP = District(
 )
 
 #: Registry for the CLI: ``--district <key>``.
-DISTRICTS: dict[str, District] = {DE_PIJP.name: DE_PIJP}
+# Zuid + Centrum, Amsterdam (29 Sep 2026): the larger map for 512 m windows (C5 resolution test B) and
+# for more varied city fabric than De Pijp alone. Contains De Pijp. Landmarks inside:
+#   Dam square ~ 4.893 E, 52.373 N (medieval core, canal ring)   Vondelpark ~ 4.858-4.882 E, 52.356-52.361 N
+#   Zuidas / WTC ~ 4.873 E, 52.338 N (modern towers)            Rivierenbuurt ~ 4.895-4.910 E, 52.340-52.348 N
+#   Artis / Plantage ~ 4.915 E, 52.366 N
+# Sunshine and elevation are not built for this district (the c4/c5 tasks do not use them).
+ZUID_CENTRUM = District(
+    name="zuid_centrum",
+    city="amsterdam",
+    label="Zuid + Centrum, Amsterdam",
+    min_lon=4.855,
+    min_lat=52.333,
+    max_lon=4.925,
+    max_lat=52.378,
+)
+
+DISTRICTS: dict[str, District] = {DE_PIJP.name: DE_PIJP, ZUID_CENTRUM.name: ZUID_CENTRUM}

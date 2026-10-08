@@ -8,8 +8,8 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from matplotlib.patches import FancyBboxPatch, Rectangle, FancyArrowPatch, Polygon
 
-REPO = Path.home() / "Github/spatial_reasoning_LLM_artifact"
-OUT = Path.home() / "Github/spatial_reasoning_public/docs/figures"; OUT.mkdir(parents=True, exist_ok=True)
+REPO = Path(__file__).resolve().parents[1]
+OUT = REPO / "docs/figures"; OUT.mkdir(parents=True, exist_ok=True)
 os.chdir(REPO / "harness"); sys.path.insert(0, str(REPO / "harness")); sys.path.insert(0, str(REPO))
 import torch, config
 LED = {r["id"]: r for r in json.load(open(REPO / "runs/experiments.json"))["runs"]}

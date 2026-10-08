@@ -136,7 +136,7 @@ def eval_loader_c1(model, loader, *, max_batches: int | None = None) -> dict:
     loss_sum = 0.0
     n_iter = max_batches if max_batches is not None else 1
     for _ in range(n_iter):
-        img, tgt, task_id, cond_ids = loader_next_batch(loader)
+        img, tgt, task_id, cond_ids, tok_tgt = loader_next_batch(loader)
         img, tgt = img.to(device), tgt.to(device)
         if task_id is not None:
             task_id = task_id.to(device)

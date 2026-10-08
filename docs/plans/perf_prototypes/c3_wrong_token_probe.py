@@ -3,7 +3,7 @@ If the tokens steer, the output under the food_drink token is the dense mask, un
 under m1 the conjunction. Also: attention-to-marker of the strongest heads under each token."""
 import sys, os, json, math
 from pathlib import Path
-REPO = Path.home() / "Github/spatial_reasoning_LLM_artifact"
+REPO = Path(__file__).resolve().parents[3]
 os.chdir(REPO / "harness"); sys.path.insert(0, str(REPO / "harness")); sys.path.insert(0, str(REPO))
 import torch, torch.nn.functional as F, config
 RUN = sys.argv[1] if len(sys.argv) > 1 else "food_drink_within_100m_mix33_L4_16k_b32_disc3_relV2"

@@ -5,7 +5,7 @@ For m1 also count the cells that carry the *distance-discriminative* signal: foo
 inside the disc (positives) and food&drink cells outside it (negatives that only the marker explains)."""
 import sys, os, json, importlib
 from pathlib import Path
-REPO = Path.home() / "Github/spatial_reasoning_LLM_artifact"
+REPO = Path(__file__).resolve().parents[3]
 os.chdir(REPO / "harness"); sys.path.insert(0, str(REPO / "harness")); sys.path.insert(0, str(REPO))
 import torch, config
 led = {r["id"]: r for r in json.load(open(REPO / "runs/experiments.json"))["runs"]}

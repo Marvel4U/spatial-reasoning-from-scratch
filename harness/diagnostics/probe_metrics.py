@@ -52,7 +52,8 @@ def probe_forward_metrics(model, probe: ProbeBatch) -> dict[str, float]:
     rec: dict[str, float] = {}
     try:
         with torch.autocast(device_type=device_type, dtype=data.dtype):
-            logits, _ = model_forward(model, probe.img, None, probe.task_ids, probe.cond_ids)
+            # Hooks live on core; compiled wrapper does not invoke them.
+            logits, _ = model_forward(core, probe.img, None, probe.task_ids, probe.cond_ids)
         fg = cfg.foreground_class
         if cfg.num_classes > 1:
             score = logits[..., fg] - logits[..., 0]

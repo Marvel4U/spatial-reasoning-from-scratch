@@ -25,9 +25,11 @@ def test_next_batch_lengths():
     tgt = torch.zeros(2, 64, 64, dtype=torch.long)
     tid = torch.zeros(2, dtype=torch.long)
     cid = torch.zeros(2, 2, dtype=torch.long)
-    a, b, c, d = next_batch(_L((img, tgt)))
-    assert c is None and d is None
-    a, b, c, d = next_batch(_L((img, tgt, tid)))
-    assert d is None
-    a, b, c, d = next_batch(_L((img, tgt, tid, cid)))
-    assert d is not None
+    a, b, c, d, e = next_batch(_L((img, tgt)))
+    assert c is None and d is None and e is None
+    a, b, c, d, e = next_batch(_L((img, tgt, tid)))
+    assert d is None and e is None
+    a, b, c, d, e = next_batch(_L((img, tgt, tid, cid)))
+    assert d is not None and e is None
+    a, b, c, d, e = next_batch(_L((img, tgt, tid, cid, tid)))       # C5: token target as the fifth element
+    assert e is not None

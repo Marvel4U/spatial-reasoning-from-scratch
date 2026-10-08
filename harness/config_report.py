@@ -17,7 +17,13 @@ def print_config_report(model, train_samples: int, val_samples: int, train_steps
     print(f"  params:    {n_params:,} ({n_params / 1e6:.2f}M)")
     print(f"  data:      {config.data_source}, rung={config.task_rung}, encoding={config.encoding_mode}")
     print(f"  train:     batch={config.batch_size}, lr={config.learning_rate:g}, steps={steps}")
-    print(f"  compile:   {'torch.compile' if config.use_compile else 'off'}")
+    if config.use_compile:
+        dyn = getattr(config, "use_compile_dynamic", None)
+        lim = getattr(config, "use_compile_dynamo_cache_size_limit", None)
+        extra = f", dynamo_cache_limit={lim}" if lim is not None else ""
+        print(f"  compile:   torch.compile (dynamic={dyn!r}{extra})")
+    else:
+        print("  compile:   off")
     print(f"  pool:      train {train_samples:,} samples, val {val_samples:,} samples")
     print(f"  this run:  ~{samples_seen:,} sample presentations")
     print("=====================")

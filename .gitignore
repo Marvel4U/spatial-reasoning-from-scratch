@@ -7,3 +7,4 @@ runs/*
 !runs/experiments.json
 !runs/VIEWER_PANELS.md
 *.pt
+models/hf/

@@ -401,10 +401,13 @@ def _load_worldsnap_c4():
     train_routes = load_c4_route_index(
         routes_dir, "train", device, max_items=config.worldsnap_max_train_items,
     )
+    if int(train_routes.get("crop_px", 256)) != int(config.img_size):
+        raise ValueError(f"route store {routes_dir} has {train_routes.get('crop_px')} px windows but "
+                         f"config.img_size={config.img_size}; set img_size to the store's window size")
     if config.c4_max_straight_m is not None:
         def _filt(ri):
             keep = ri["straight_px"] <= float(config.c4_max_straight_m)
-            return {k: v[keep] for k, v in ri.items()}
+            return {k: (v[keep] if torch.is_tensor(v) else v) for k, v in ri.items()}
         n_tr, n_va = train_routes["origin"].shape[0], val_routes["origin"].shape[0]
         train_routes, val_routes = _filt(train_routes), _filt(val_routes)
         config.log(f"  c4 max_straight_m={config.c4_max_straight_m}: train {n_tr}->{train_routes['origin'].shape[0]}, "
@@ -468,6 +471,34 @@ def _load_worldsnap_c4():
         val_loader = _val_loader()
         config.c4_active_task_keys = c4_keys
         task_note = f"task={config.c4_task_key} val={eval_key}"
+    if getattr(config, "c5_token_targets", False):
+        train_loader.return_tokens = True   # C5: next_batch returns (img, tgt, task_id, cond_ids, tok_tgt)
+    if getattr(config, "c5_wave_pad_noise", None):
+        train_loader.pad_noise = dict(config.c5_wave_pad_noise)   # C5 R5: perturbed pads in training only
+    own = getattr(config, "c5_wave_own_pads", None)
+    if own:                                                       # C5 R5: the network's own pads, training only
+        from spatial_data.c5_own_pads import load_own_pads, own_pads_start_step
+        if config.c4_max_straight_m is not None or mix_c3:
+            raise ValueError("c5_wave_own_pads is keyed by the route index of the store: not with c4_max_straight_m or a c3 mix")
+        own_path = Path(routes_dir) / own["path"]
+        train_loader.own_pads = load_own_pads(own_path, p=float(own.get("p", 0.5)), device=device,
+                                              goal_m=train_routes.get("wave_goal_m"))
+        om = train_loader.own_pads
+        om["start_step"] = own_pads_start_step(own, config.t_train)   # e.g. start_frac 1/3: from the second third on
+        om["active"] = om["start_step"] <= 0
+        config.log(f"  c5 own pads: {own_path.name} p={om['p']} from step {om['start_step']}, covers {om['n_routes']} of "
+                   f"{train_loader.n_routes} train routes (run {om['meta'].get('run')} @ step {om['meta'].get('checkpoint_step')})")
+    cl = getattr(config, "c5_wave_cleanup", None)
+    if cl:                                                        # C5 cleanup pass: wave_draw on own drawings, training only
+        from spatial_data.c5_cleanup import load_cleanup
+        if config.c4_max_straight_m is not None or mix_c3:
+            raise ValueError("c5_wave_cleanup is keyed by the route index of the store: not with c4_max_straight_m or a c3 mix")
+        cl_path = Path(routes_dir) / cl["path"]
+        train_loader.cleanup = load_cleanup(cl_path, p=float(cl.get("p", 1.0)), device=device, own_pads_name=cl.get("own_pads"),
+                                            grid=g, goal_m=train_routes.get("wave_goal_m"))
+        cm = train_loader.cleanup
+        config.log(f"  c5 cleanup: {cl_path.name} p={cm['p']} on wave_draw, covers {cm['n_routes']} of {train_loader.n_routes} "
+                   f"train routes, {100 * cm['share_own_chain']:.0f} % own chain (drawings of {cm['meta'].get('own_pads_run')})")
     val_n = len(val_loader)
     train_n = len(train_loader)
     config.log(
@@ -500,7 +531,7 @@ def build_c4_val_loader(routes_subdir: str):
     )
     if config.c4_max_straight_m is not None:
         keep = val_routes["straight_px"] <= float(config.c4_max_straight_m)
-        val_routes = {k: v[keep] for k, v in val_routes.items()}
+        val_routes = {k: (v[keep] if torch.is_tensor(v) else v) for k, v in val_routes.items()}
     eval_key = config.c4_eval_task_key
     if eval_key == "segment":
         from spatial_data.dataset_c4_mixed_gpu import c4_segment_val_loader

@@ -48,6 +48,7 @@ D_MIN_PX, D_MAX_PX = 40.0, 250.0
 MAX_PATH_PIX = 640          # padded pixel list length (path <= ELLIPSE * 250 m)
 MAX_VERTS = 64
 STRATA = ((1.0, 1.05), (1.05, 1.3), (1.3, 99.0))   # detour-ratio strata, equal shares
+SHARD_SUFFIX = ""           # set by --shard: "_shard{k}of{n}"
 
 
 def load_district(crops_dir: Path):
@@ -66,15 +67,26 @@ def block_rects_px(split: dict, which: str) -> list[tuple[int, int, int, int]]:
     return rects
 
 
-class WindowSampler:
-    """Train: windows that touch no held-out block. Val/test: windows fully inside a block of that split."""
+def half_rects_px(h: int, w: int) -> tuple[list, list]:
+    """--halves: val = the west half of the district, test = the east half (each one rectangle)."""
+    return [(0, 0, w // 2, h)], [(w - w // 2, 0, w, h)]
 
-    def __init__(self, split: dict, h: int, w: int, rng: np.random.Generator):
+
+class WindowSampler:
+    """Train: windows that touch no held-out block. Val/test: windows fully inside a block of that split.
+    halves=True (evaluation-only districts, 4 Oct): val windows lie fully in the west half, test windows fully in the
+    east half. Why: a 512 m window does not fit into the 446-500 m blocks of De Pijp or the maze, and these districts
+    are only evaluated, so their train ground is not needed; val and test ground stay disjoint."""
+
+    def __init__(self, split: dict, h: int, w: int, rng: np.random.Generator, halves: bool = False):
         self.rng = rng
         self.h, self.w = h, w
-        self.heldout = block_rects_px(split, "val") + block_rects_px(split, "test")
-        self.val = block_rects_px(split, "val")
-        self.test = block_rects_px(split, "test")
+        if halves:
+            self.val, self.test = half_rects_px(h, w)
+        else:
+            self.val = block_rects_px(split, "val")
+            self.test = block_rects_px(split, "test")
+        self.heldout = self.val + self.test
 
     def draw(self, which: str) -> tuple[int, int]:
         if which == "train":
@@ -86,6 +98,9 @@ class WindowSampler:
                     return dx, dy
         rects = self.val if which == "val" else self.test
         x0, y0, x1, y1 = rects[int(self.rng.integers(0, len(rects)))]
+        if x1 - x0 < CROP_PX or y1 - y0 < CROP_PX:
+            raise ValueError(f"{which} rectangle {x1 - x0}x{y1 - y0} m is smaller than the {CROP_PX} m window "
+                             "(use --halves for an evaluation-only district)")
         dx = int(self.rng.integers(x0, x1 - CROP_PX + 1))
         dy = int(self.rng.integers(y0, y1 - CROP_PX + 1))
         return dx, dy
@@ -150,6 +165,31 @@ def same_component(mask: np.ndarray, a: np.ndarray, b: np.ndarray) -> bool:
     return lab[int(a[1]), int(a[0])] == lab[int(b[1]), int(b[0])] != 0
 
 
+GPU_LOS = False             # --gpu-los: line of sight on the GPU (512 m windows: ~98 % of the build time is here)
+_gpu_mask = {"key": None, "t": None}
+
+
+def _visible_from_gpu(p: np.ndarray, targets: np.ndarray, mask: np.ndarray) -> np.ndarray:
+    """Same test as the CPU path: the same t (np.linspace, CPU), float64 on the GPU, floor, clip, any.
+    Results can differ from the CPU only where an FMA rounds a coordinate across an integer boundary."""
+    import torch
+    key = (mask.__array_interface__["data"][0], mask.shape)
+    if _gpu_mask["key"] != key:
+        _gpu_mask["key"] = key; _gpu_mask["t"] = torch.from_numpy(np.ascontiguousarray(mask)).cuda()
+    m = _gpu_mask["t"]
+    d = np.linalg.norm(targets - p, axis=1)
+    L = int(np.ceil(d.max() * 2)) + 2
+    t = torch.from_numpy(np.linspace(0.0, 1.0, L)).cuda().view(1, -1)
+    tkey = (targets.__array_interface__['data'][0], targets.shape)
+    if _gpu_mask.get('tkey') != tkey:            # the search passes the same node array on every expansion
+        _gpu_mask['tkey'] = tkey; _gpu_mask['tg'] = torch.from_numpy(targets.astype(np.float64)).cuda()
+    pg = torch.from_numpy(p).cuda(); tg = _gpu_mask['tg']
+    dx = (tg[:, 0] - pg[0]).view(-1, 1); dy = (tg[:, 1] - pg[1]).view(-1, 1)
+    xi = (pg[0] + t * dx).floor().long().clamp(0, CROP_PX - 1)
+    yi = (pg[1] + t * dy).floor().long().clamp(0, CROP_PX - 1)
+    return (~m[yi, xi].any(dim=1)).cpu().numpy()
+
+
 def visible_from(p: np.ndarray, targets: np.ndarray, mask: np.ndarray, _unused=None) -> np.ndarray:
     """Boolean mask over targets: the segment p->target crosses no building pixel.
 
@@ -157,6 +197,8 @@ def visible_from(p: np.ndarray, targets: np.ndarray, mask: np.ndarray, _unused=N
     rasterised target is checked against; polygons only supply the corner nodes."""
     if len(targets) == 0:
         return np.zeros(0, dtype=bool)
+    if GPU_LOS:
+        return _visible_from_gpu(np.asarray(p, dtype=np.float64), targets, mask)
     d = np.linalg.norm(targets - p, axis=1)
     L = int(np.ceil(d.max() * 2)) + 2
     t = np.linspace(0.0, 1.0, L)[None, :, None]
@@ -295,15 +337,16 @@ def build_split(which: str, n: int, building: np.ndarray, sampler: WindowSampler
     )
     for i, r in enumerate(recs):
         out["poly"][i, :len(r["poly"])] = r["poly"]; out["path_pix"][i, :len(r["pix"])] = r["pix"]
-    np.savez_compressed(out_dir / f"c4_routes_{which}.npz", **out)
+    np.savez_compressed(out_dir / f"c4_routes_{which}{SHARD_SUFFIX}.npz", **out)
     stats.update(n=N, seconds=round(time.perf_counter() - t0, 1), strata=counts,
-                 mean_detour=float(np.mean(out["detour_ratio"])), mean_path_m=float(np.mean(out["path_px"])))
-    (out_dir / f"c4_routes_{which}_stats.json").write_text(json.dumps(stats, indent=1))
-    print(f"{which}: {N} samples -> {out_dir / f'c4_routes_{which}.npz'}  {stats}")
+                 mean_detour=float(np.mean(out["detour_ratio"])), mean_path_m=float(np.mean(out["path_px"])),
+                 crop_px=CROP_PX, d_min_px=D_MIN_PX, d_max_px=D_MAX_PX, max_expansions=MAX_EXPANSIONS)
+    (out_dir / f"c4_routes_{which}{SHARD_SUFFIX}_stats.json").write_text(json.dumps(stats, indent=1))
+    print(f"{which}: {N} samples -> {out_dir / f'c4_routes_{which}{SHARD_SUFFIX}.npz'}  {stats}")
     if overlays:
         by_s = [[r for r in recs if r["stratum"] == k] for k in range(len(STRATA))]
         pick = [r for k in range(overlays) for r in by_s[k % len(STRATA)][k // len(STRATA):k // len(STRATA) + 1]]
-        draw_overlays(pick[:overlays], building, out_dir / f"c4_overlay_{which}.png")
+        draw_overlays(pick[:overlays], building, out_dir / f"c4_overlay_{which}{SHARD_SUFFIX}.png")
 
 
 def draw_overlays(recs, building, path):
@@ -325,18 +368,38 @@ def draw_overlays(recs, building, path):
 
 
 def main():
+    global CROP_PX, D_MIN_PX, D_MAX_PX, MAX_PATH_PIX, MAX_EXPANSIONS, SHARD_SUFFIX
     ap = argparse.ArgumentParser()
     ap.add_argument("--crops-dir", default="data/amsterdam/de_pijp/crops/v4")
     ap.add_argument("--out", default="data/amsterdam/de_pijp/crops/v4/c4")
     ap.add_argument("--n-train", type=int, default=200); ap.add_argument("--n-val", type=int, default=50)
     ap.add_argument("--n-test", type=int, default=0); ap.add_argument("--seed", type=int, default=1337)
     ap.add_argument("--overlays", type=int, default=8)
+    ap.add_argument("--crop-px", type=int, default=CROP_PX, help="window size in px (1 px = 1 m)")
+    ap.add_argument("--d-min", type=float, default=D_MIN_PX); ap.add_argument("--d-max", type=float, default=D_MAX_PX)
+    ap.add_argument("--max-expansions", type=int, default=MAX_EXPANSIONS)
+    ap.add_argument("--shard", default=None, help="k/n: build part k of n (own seed stream, own file names)")
+    ap.add_argument("--gpu-los", action="store_true", help="line-of-sight test on the GPU (same sample points)")
+    ap.add_argument("--halves", action="store_true",
+                    help="evaluation-only district: val windows in the west half, test windows in the east half, no train")
     args = ap.parse_args()
+    if args.halves and args.n_train > 0:
+        ap.error("--halves leaves no train ground: use --n-train 0")
+    global GPU_LOS
+    GPU_LOS = args.gpu_los
+    CROP_PX, D_MIN_PX, D_MAX_PX, MAX_EXPANSIONS = args.crop_px, args.d_min, args.d_max, args.max_expansions
+    MAX_PATH_PIX = max(MAX_PATH_PIX, int(math.ceil(2.56 * D_MAX_PX)))   # 640 at 250 m, as before
+    shard = None
+    if args.shard:
+        k, n_sh = (int(v) for v in args.shard.split("/")); shard = (k, n_sh); SHARD_SUFFIX = f"_shard{k}of{n_sh}"
     crops_dir = Path(args.crops_dir); out_dir = Path(args.out); out_dir.mkdir(parents=True, exist_ok=True)
     building, split = load_district(crops_dir)
-    rng = np.random.default_rng(args.seed)
-    sampler = WindowSampler(split, *building.shape, rng)
+    rng = np.random.default_rng(args.seed if shard is None else [args.seed, shard[0], shard[1]])
+    sampler = WindowSampler(split, *building.shape, rng, halves=args.halves)
     print(f"district {building.shape}, building share {building.mean():.3f}, heldout rects {sampler.heldout}")
+    (out_dir / "store.json").write_text(json.dumps({"crop_px": CROP_PX, "d_min_px": D_MIN_PX, "d_max_px": D_MAX_PX,
+                                                    "max_expansions": MAX_EXPANSIONS, "crops_dir": str(crops_dir),
+                                                    **({"heldout": "halves (val west, test east)"} if args.halves else {})}, indent=1))
     for which, n in (("train", args.n_train), ("val", args.n_val), ("test", args.n_test)):
         if n > 0:
             build_split(which, n, building, sampler, rng, args.overlays, out_dir)

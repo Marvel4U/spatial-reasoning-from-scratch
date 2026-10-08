@@ -92,6 +92,8 @@ def figure(png: Path, rgb: np.ndarray, w_m: int, h_m: int, recs: list, centres: 
                 bbox={"fc": "black", "ec": "none", "alpha": 0.5, "pad": 1.5})
     for split, pts in centres.items():
         p = np.asarray(pts, dtype=float)
+        if len(p) == 0:
+            continue                      # districts built without crop files (planes and split only)
         ax.scatter(p[:, 0], p[:, 1], s=7, c=colours[split], alpha=0.5, linewidths=0.2,
                    edgecolors="black", label=f"{split} n={len(pts)}")
     ax.legend(loc="lower right", fontsize=9, markerscale=5, framealpha=0.85)

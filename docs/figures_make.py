@@ -1,5 +1,5 @@
 """README figures F1-F8 for the public repository. Run from the source repo with its venv:
-  .venv/bin/python docs/figures_make.py  (writes to ~/Github/spatial_reasoning_public/docs/figures/)"""
+  .venv/bin/python docs/figures_make.py  (writes to docs/figures/; reads runs/ and data/ of a full working copy)"""
 import sys, os, json, shutil
 from pathlib import Path
 import numpy as np
@@ -9,8 +9,8 @@ import matplotlib.pyplot as plt
 from matplotlib.colors import ListedColormap
 from PIL import Image
 
-REPO = Path.home() / "Github/spatial_reasoning_LLM_artifact"
-OUT = Path.home() / "Github/spatial_reasoning_public/docs/figures"; OUT.mkdir(parents=True, exist_ok=True)
+REPO = Path(__file__).resolve().parents[1]
+OUT = REPO / "docs/figures"; OUT.mkdir(parents=True, exist_ok=True)
 os.chdir(REPO / "harness"); sys.path.insert(0, str(REPO / "harness")); sys.path.insert(0, str(REPO))
 import torch, config
 LED = {r["id"]: r for r in json.load(open(REPO / "runs/experiments.json"))["runs"]}

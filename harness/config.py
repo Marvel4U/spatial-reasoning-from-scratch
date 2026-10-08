@@ -1,4 +1,9 @@
 """Spatial local-model harness config (Track B grid ViT)."""
+import os
+
+# Before first CUDA init (import torch / setup_device). Override via shell if needed.
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")
+
 from pathlib import Path
 
 # Repo root (parent of harness/), not cwd — data and runs stay out of harness/.
@@ -24,7 +29,10 @@ n_embd = 384
 h_heads = 6
 enc_n_layer = 2
 dropout = 0.0
-use_compile = False  # ~10–15% GPU step after Steps 1–4; 30s+ warm-up — enable for long GEX runs only
+use_compile = False  # harness sets True when train_steps >= use_compile_min_train_steps (unless override)
+use_compile_min_train_steps = 2000  # smokes / short probes stay eager
+use_compile_dynamic: bool | None = None  # None = PyTorch default (static first; dynamic only on recompile)
+use_compile_dynamo_cache_size_limit = 32  # default Dynamo limit is 8 specialized graphs per function
 seed = 1337
 use_gpu = True
 # Intra-op CPU threads for PyTorch ops (batch building). None = PyTorch default.
@@ -79,6 +87,22 @@ c4_eval_task_key: str = "segment"  # val / spatial eval primary task (Phase D: s
 c4_routes_subdir = "c4"  # folder under the cropset dir holding c4_routes_{split}.npz (e.g. "c4_100k")
 c4_max_straight_m: float | None = None  # keep only routes whose straight distance <= this (train and val)
 grad_clip = 1.0  # clip_grad_norm_ threshold; 1.0 was the fixed value before 25 Sep 2026
+c5_wave_own_pads: dict | None = None  # C5 R5 own pads in training, e.g. {"path": "c5_own_pads_train.npz", "p": 0.5, "start_frac": 1/3}; path relative to the route store; start_frac / start_step = first step with own pads (default 0) (spatial_data/c5_own_pads.py)
+c5_wave_cleanup: dict | None = None  # C5 cleanup pass in training, e.g. {"path": "c5_cleanup_train_r2.npz", "own_pads": "c5_own_pads_train_r2.npz", "p": 1.0}: wave_draw samples read the network's own drawing and learn the shortest chain through it; path relative to the route store; on from step 0 (spatial_data/c5_cleanup.py)
+c5_wave_fg_weight_override: dict | None = None  # per-task lit-cell CE weight instead of the c4_weight_alpha one, e.g. {"wave_draw": 1.0} (c4_fg_weight)
+c5_wave_pad_noise: dict | None = None  # C5 R5 training pad noise, e.g. {"p": 0.5, "thicken": 0.5, "shift": 0.5, "drop": 0.05, "add": 0.002}
+c5_token_targets = False  # C5: c4 loaders return a 5th element tok_tgt (B,) long, -1 = no token target
+c5_token_head_enabled = False  # C5 M2: readout prefix slot + linear token head
+c5_n_token_classes = 37  # length bins (spatial_data.c4_tasks.N_LENGTH_BINS); phase tokens later
+c5_token_loss_weight = 1.0
+# Wave scratchpad CE (docs/memo/CHANGE_WEIGHTED_LOSS_2026-10-02.md); use with c4_grid_loss="ce" for first tests.
+c5_wave_change_group_ce = False
+c5_wave_change_ce_beta = 0.0  # soft upweight on pad≠target cells; ignored when group_ce is True
+c5_wave_change_ce_beta_schedule = ""  # "" | "thirds_decay" (see plain_gpt_module.wave_beta_schedule)
+c5_wave_change_ce_beta_high = 5.0  # schedule peak; static runs use c5_wave_change_ce_beta only
+c5_wave_change_pad_px = 0  # group_ce only: dilated halo as fifth equal-weight group
+# Eval-only: wave copied/new/false_fg at P(fg) > w/(1+w); pred strips / rollout stay argmax @ 0.5.
+c5_wave_eval_decision_rule = False
 c1_task_key = "building"  # L5a single-task mode
 c1_task_mode = "single"  # single | core_four (L5b) | factorised_twelve (L5c)
 c1_held_out_task_keys: tuple[str, ...] = ("surface_0", "estab_2")
@@ -126,6 +150,11 @@ diagnostics_probe_batch_size = 64
 diagnostics_pred_samples = 8
 diagnostics_probe_seed = 1337
 diagnostics_pred_enabled = True
+# Iterative wave-search rollout on fixed val route(s) (scratchpad fed from model preds); requires wave sidecars.
+diagnostics_wave_rollout_enabled = True
+diagnostics_wave_rollout_route_index = 0  # used when route_indices is None or empty
+diagnostics_wave_rollout_route_indices: list[int] | None = [0, 363]  # 363 = gallery example route
+diagnostics_wave_rollout_start_pass: int | str = 2  # int: 1-based pass; "first_back" = teacher through reach, model from 1st wave_back (per route)
 # When c4_routes_subdir differs (e.g. c4_100k), save one extra pred PNG on val from this store at train end.
 diagnostics_pred_c4_reference_subdir = "c4"
 diagnostics_checkpoint_dir = REPO_ROOT / "runs" / "checkpoints"
@@ -169,14 +198,30 @@ def c4_train_task_keys() -> list[str]:
 
 def ensure_c4_encoding() -> None:
     global encoding_mode
-    if encoding_mode != "onehot_v4":
+    if encoding_mode not in ("onehot_v4", "onehot_v4_sp"):
         encoding_mode = "onehot_v4"
     sync_in_chans_from_encoding()
 
 
 def c4_task_stats() -> dict:
     from spatial_data.c4_tasks import load_task_stats
-    return load_task_stats(c4_routes_dir())
+    return load_task_stats(c4_routes_dir(), grid=grid_out_size)
+
+
+def c4_fg_weight(key: str, stats: dict | None = None) -> float:
+    """Lit-cell (foreground) CE weight of a c4 task: from the task's lit-cell share and c4_weight_alpha (about 7.5
+    for the wave tasks at 256 m, 11 at 512 m), unless c5_wave_fg_weight_override names the task. Used for the loss
+    (c4_model_extra_config) and for the eval's decision threshold (eval_c4.wave_decision_tau), so both agree.
+    Why it matters for over-highlighting: with weight w on lit target cells, the loss-minimising P(lit) of a cell
+    that is lit with probability q is w q / (w q + 1 - q). The rollout reads out at 0.5, so it lights every cell
+    with q >= 1 / (1 + w): about 12 % at w = 7.5, i.e. the weight rewards painting doubtful cells. A weight of 1
+    makes the output calibrated at 0.5 (lit iff q >= 0.5); values below 1 would penalise false lit cells more than
+    missed ones (sharper, at the risk of broken lines: docs/memo/WAVE_MIX_TOKEN_LOSS_2026-10-02.md section 5)."""
+    ov = c5_wave_fg_weight_override or {}
+    if key in ov:
+        return float(ov[key])
+    from spatial_data.c4_tasks import fg_ce_weights_for_key
+    return fg_ce_weights_for_key(key, stats if stats is not None else c4_task_stats(), alpha=c4_weight_alpha)[0]
 
 
 def c4_model_extra_config() -> dict:
@@ -185,17 +230,19 @@ def c4_model_extra_config() -> dict:
     stats = c4_task_stats()
     use_dice = c4_grid_loss == "ce_dice"
     keys = c4_train_task_keys()
-    c4_only = [k for k in keys if k in ("segment", "detour", "building")]
+    c4_only = [k for k in keys if k in ("segment", "detour", "building", "rays", "length_line", "length_path", "tighten", "trajectories", "trajectories_one",
+                                         "trajectories_one_r40", "trajectories_step2_r40", "trajectories_step3_r40", "trajectories_step4_r40",
+                                         "wave_first", "wave_step", "wave_reach", "wave_back", "wave_origin", "wave_draw", "wave_fwd", "wave_bwd")]
     if use_dice or len(keys) == 1:
         fg_w = None if use_dice else (
-            fg_ce_weights_for_key(c4_only[0], stats, alpha=c4_weight_alpha) if c4_only else None
+            (c4_fg_weight(c4_only[0], stats),) if c4_only else None
         )
     else:
         fg_w = tuple(
-            fg_ce_weights_for_key(k, stats, alpha=c4_weight_alpha)[0]
+            c4_fg_weight(k, stats)
             for k in c4_only
         ) if c4_only else None
-    return {
+    out = {
         "n_tasks": len(keys),
         "n_cond_emb": max(n_cond_emb_for_c3(), n_cond_emb_for_c4()),
         "c1_task_conditioning": "cond_tokens",
@@ -206,6 +253,15 @@ def c4_model_extra_config() -> dict:
         "grid_loss": c4_grid_loss,
         "ce_dice_weight": c4_ce_dice_weight,
     }
+    if c5_token_head_enabled:
+        from spatial_data.c4_tasks import N_LENGTH_BINS
+        out["token_head_enabled"] = True
+        out["n_token_classes"] = c5_n_token_classes or N_LENGTH_BINS
+        out["token_loss_weight"] = c5_token_loss_weight
+    out["wave_change_group_ce"] = c5_wave_change_group_ce
+    out["wave_change_ce_beta"] = c5_wave_change_ce_beta
+    out["wave_change_pad_px"] = c5_wave_change_pad_px
+    return out
 
 
 def c3_task_stats() -> dict:
@@ -215,7 +271,7 @@ def c3_task_stats() -> dict:
 
 def ensure_c3_encoding() -> None:
     global encoding_mode
-    if encoding_mode != "onehot_v4":
+    if encoding_mode not in ("onehot_v4", "onehot_v4_sp"):
         encoding_mode = "onehot_v4"
     sync_in_chans_from_encoding()
 
@@ -412,7 +468,7 @@ def district_data_dir(root: Path | None = None) -> Path:
 
 
 def sync_in_chans_from_encoding() -> None:
-    """Keep config.in_chans aligned with encoding_mode (scalar 4, onehot 13, onehot_v4 16)."""
+    """Keep config.in_chans aligned with encoding_mode (scalar 4, onehot 13, onehot_v4 16, onehot_v4_sp 17)."""
     global in_chans
     from spatial_data.channels import in_chans_for_encoding
     in_chans = in_chans_for_encoding(encoding_mode)

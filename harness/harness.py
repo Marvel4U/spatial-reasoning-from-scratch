@@ -2,9 +2,9 @@
 import time
 from pathlib import Path
 
-import torch
+import config  # PYTORCH_CUDA_ALLOC_CONF before torch
 
-import config
+import torch
 import data
 import eval_spatial
 import experiments
@@ -43,6 +43,27 @@ def _apply_overrides(overrides: dict) -> dict:
 def _restore_overrides(saved: dict):
     for k, v in saved.items():
         setattr(config, k, v)
+
+
+def _apply_auto_use_compile(train_steps: int, overrides: dict) -> None:
+    """Long runs: torch.compile on CUDA unless the spec sets use_compile explicitly."""
+    if "use_compile" in overrides:
+        return
+    min_steps = int(getattr(config, "use_compile_min_train_steps", 2000))
+    on = train_steps >= min_steps
+    config.use_compile = on
+    overrides["use_compile"] = on
+
+
+def _align_probe_batch_for_compile(overrides: dict) -> None:
+    """When compile is on, tier-2 probe should match train batch unless the spec sets probe B."""
+    if not config.use_compile or not config.diagnostics_probe_enabled:
+        return
+    if "diagnostics_probe_batch_size" in overrides:
+        return
+    bs = int(config.batch_size)
+    if config.diagnostics_probe_batch_size != bs:
+        config.diagnostics_probe_batch_size = bs
 
 
 def _normalize_spatial_eval(cfg) -> dict | None:
@@ -96,7 +117,19 @@ def run_experiment(spec: dict, results_path: Path | None = None) -> dict:
     print(f"\n{'=' * 60}\nexperiment: {run_id}  ({arch}@v{arch_version})\n{'=' * 60}")
 
     saved = _apply_overrides(overrides)
+    if "t_train" not in overrides:
+        saved["t_train"] = config.t_train
+    config.t_train = train_steps
+    if "use_compile" not in saved:
+        saved["use_compile"] = config.use_compile
+    _apply_auto_use_compile(train_steps, overrides)
+    _align_probe_batch_for_compile(overrides)
     data.load_data()
+    if config.task_rung == "c4":
+        from spatial_data.c4_sidecars import assert_c4_train_val_sidecars
+
+        keys = list(config.c4_task_keys) if config.c4_is_multi_task() else [config.c4_task_key]
+        assert_c4_train_val_sidecars(config.c4_routes_dir(), keys)
     train_n, val_n = data.train_sample_count(), data.val_sample_count()
     started = now_iso()
     recorder = None

@@ -1,7 +1,7 @@
 """Score E5b checkpoints on train-distribution batches with K markers vs the fixed 1-marker val set."""
 import sys, os, json
 from pathlib import Path
-REPO = Path.home() / "Github/spatial_reasoning_LLM_artifact"
+REPO = Path(__file__).resolve().parents[3]
 os.chdir(REPO / "harness"); sys.path.insert(0, str(REPO / "harness")); sys.path.insert(0, str(REPO))
 import torch, config
 led = {r["id"]: r for r in json.load(open(REPO / "runs/experiments.json"))["runs"]}

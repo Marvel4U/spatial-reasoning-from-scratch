@@ -104,7 +104,7 @@ Purpose: turn "under way" into a number for the detour, and answer the four chea
 N6 needs the larger store, which builds on the CPU in about 3.5 hours and does not touch the GPU; started first, it is ready long before the queue reaches N6. Commands, in this order:
 
 ```bash
-cd ~/Github/spatial_reasoning_LLM_artifact && nohup .venv/bin/python -u -m spatial_data.c4_routes --n-train 100000 --n-val 500 --n-test 500 --overlays 9 --seed 2027 --out data/amsterdam/de_pijp/crops/v4/c4_100k > runs/logs/c4_routes_build_100k.log 2>&1 &
+nohup .venv/bin/python -u -m spatial_data.c4_routes --n-train 100000 --n-val 500 --n-test 500 --overlays 9 --seed 2027 --out data/amsterdam/de_pijp/crops/v4/c4_100k > runs/logs/c4_routes_build_100k.log 2>&1 &
 ```
 
 Then set `RUN = c4_overnight_run_queue()` in `harness/experiments.py` and start the harness as usual.

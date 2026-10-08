@@ -95,11 +95,12 @@ class C4C3MixGpuTrainLoader:
         markers = self.c4_route["markers"][ix]
         path_pix = self.c4_route["path_pix"][ix]
         n_pix = self.c4_route["n_pix"][ix]
+        fx, fn = (self.c4_route["fan_xy"][ix], self.c4_route["fan_n"][ix]) if "fan_xy" in self.c4_route else (None, None)
         layers = _cut_windows(self.c4_district, origin)
         mc, mr = _marker_cols_rows(markers)
         img = build_image_from_crops(layers, self.encoding, marker_col=mc, marker_row=mr)
         tgt = _targets_for_batch(
-            spec, markers=markers, path_pix=path_pix, n_pix=n_pix,
+            spec, markers=markers, path_pix=path_pix, n_pix=n_pix, fan_xy=fx, fan_n=fn,
             grid_size=self.grid_size, device=self.device, layers=layers,
         )
         return img[0], tgt[0], mc[0], mr[0]

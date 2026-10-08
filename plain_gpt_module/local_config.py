@@ -32,6 +32,14 @@ class LocalGridViTConfig:
     rel_pos_bias: RelPosBiasMode = "none"  # E5b: which encoder blocks get learned 2-D rel bias
     rel_pos_max_offset: int = 7  # K: clip Δrow/Δcol to ±K patches → (2K+1)² buckets + 1 prefix bucket
     use_sincos_pos: bool = True  # V3 ablation: patch tokens get fixed 2-D sin-cos (off when rel-only)
+    # C5 M2: optional scalar token head (length bins, later phase tokens) from a readout prefix slot.
+    token_head_enabled: bool = False
+    n_token_classes: int = 0
+    token_loss_weight: float = 1.0
+    # C5 wave: upweight cells that differ from scratchpad ch16 (memo CHANGE_WEIGHTED_LOSS_2026-10-02).
+    wave_change_group_ce: bool = False  # four-group equal CE share per sample
+    wave_change_ce_beta: float = 0.0  # else multiply changing cells by (1 + beta) on top of fg weights
+    wave_change_pad_px: int = 0  # with group_ce: fifth halo group = core change dilated by this many px
 
     def __post_init__(self) -> None:
         if self.in_chans < 1:
@@ -77,6 +85,21 @@ class LocalGridViTConfig:
             raise ValueError(f"rel_pos_bias must be none|first|all, got {self.rel_pos_bias!r}")
         if self.rel_pos_max_offset < 0:
             raise ValueError(f"rel_pos_max_offset must be >= 0, got {self.rel_pos_max_offset}")
+        if self.token_head_enabled:
+            if self.n_token_classes < 2:
+                raise ValueError("token_head_enabled requires n_token_classes >= 2")
+            if self.c1_task_conditioning != "cond_tokens":
+                raise ValueError("C5 token head requires cond_tokens conditioning")
+        elif self.n_token_classes != 0:
+            raise ValueError("n_token_classes must be 0 when token_head_enabled is False")
+        if self.wave_change_group_ce and self.wave_change_ce_beta > 0:
+            raise ValueError("use wave_change_group_ce or wave_change_ce_beta, not both")
+        if self.wave_change_ce_beta < 0:
+            raise ValueError(f"wave_change_ce_beta must be >= 0, got {self.wave_change_ce_beta}")
+        if self.wave_change_pad_px < 0:
+            raise ValueError(f"wave_change_pad_px must be >= 0, got {self.wave_change_pad_px}")
+        if self.wave_change_pad_px > 0 and not self.wave_change_group_ce:
+            raise ValueError("wave_change_pad_px requires wave_change_group_ce")
 
     @property
     def patch_grid(self) -> int:
@@ -92,14 +115,32 @@ class LocalGridViTConfig:
         return g * g
 
     @property
-    def n_cond_token_slots(self) -> int:
-        """Fixed task prefix length for cond_tokens (C2_PLAN §4)."""
+    def n_cond_task_slots(self) -> int:
+        """Task condition tokens in the prefix (cond_ids shape is (B, this))."""
         return 2 if self.c1_task_conditioning == "cond_tokens" else 0
 
     @property
+    def n_cond_token_slots(self) -> int:
+        """Alias: task cond slots only (not including C5 readout)."""
+        return self.n_cond_task_slots
+
+    @property
+    def n_prefix_tokens(self) -> int:
+        """Task cond prefix plus optional readout slot (C5 M2)."""
+        extra = 1 if self.token_head_enabled else 0
+        return self.n_cond_task_slots + extra
+
+    @property
+    def readout_token_index(self) -> int:
+        """Encoder sequence index of the readout token (after task cond slots)."""
+        if not self.token_head_enabled:
+            raise RuntimeError("readout_token_index undefined without token_head_enabled")
+        return self.n_cond_task_slots
+
+    @property
     def encoder_seq_len(self) -> int:
-        """Patch tokens plus optional task prefix (258 when cond_tokens @ P=16)."""
-        return self.num_patches + self.n_cond_token_slots
+        """Patch tokens plus full prefix (259 @ P=16 with cond_tokens + readout)."""
+        return self.num_patches + self.n_prefix_tokens
 
     @property
     def rel_pos_n_spatial_buckets(self) -> int:

@@ -1,6 +1,6 @@
 import numpy as np, json, glob
 from pathlib import Path
-root = Path.home() / "Github/spatial_reasoning_LLM_artifact/data/amsterdam/de_pijp/crops/v2"
+root = Path(__file__).resolve().parents[3] / "data/amsterdam/de_pijp/crops/v2"
 leg = json.load(open(root / "legend.json")); print("classes:", json.dumps(leg["classes"])[:400])
 files = sorted(glob.glob(str(root / "train/*_labels.npz")))[:400]
 L = {"noise": [], "surface": [], "estab": []}

@@ -605,8 +605,13 @@ def build_trees(district: District, *, data_root: Path = DATA_ROOT) -> None:
 def _report_noise(gdf: gpd.GeoDataFrame, district: District) -> None:
     """Polygon counts and, more meaningfully, area share per dB class."""
     bbox_area = district.area_km2_rd * 1e6
-    clipped = gdf.clip(_shp_box(*district.bbox_rd))
-    print(f"\n  noise polygons in bbox   : {len(gdf)}")
+    # The source has a few invalid polygons (zuid_centrum, 29 Sep 2026: a self-intersection near RD
+    # 118893 484807 made the clip fail). The stored layer keeps them as published (no cleaning); only
+    # this area report clips a make_valid copy.
+    invalid = ~gdf.geometry.is_valid
+    print(f"\n  invalid polygons (kept)  : {int(invalid.sum())}")
+    clipped = gdf.assign(geometry=gdf.geometry.make_valid()).clip(_shp_box(*district.bbox_rd))
+    print(f"  noise polygons in bbox   : {len(gdf)}")
     print(f"  sources present          : {sorted(set(gdf['bron_label']))}")
     print(f"  periods present          : {sorted(set(gdf['periode']))}")
     print(f"  jaar values              : {sorted(set(gdf['jaar'].dropna()))}")
@@ -680,7 +685,7 @@ def build_noise(district: District, *, data_root: Path = DATA_ROOT) -> None:
                 },
                 "band_area_m2_in_bbox": {
                     str(k): round(float(v), 1)
-                    for k, v in gdf.clip(_shp_box(*district.bbox_rd))
+                    for k, v in gdf.assign(geometry=gdf.geometry.make_valid()).clip(_shp_box(*district.bbox_rd))
                     .pipe(lambda g: g[(g["bron_slug"] == slug) & (g["periode"] == periode)])
                     .groupby("db_label")
                     .geometry.apply(lambda s: s.area.sum())

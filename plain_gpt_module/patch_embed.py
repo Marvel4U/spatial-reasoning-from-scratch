@@ -5,6 +5,32 @@ import torch
 import torch.nn as nn
 
 
+def expand_proj_weight(
+    weight: torch.Tensor,
+    *,
+    old_in_chans: int,
+    new_in_chans: int,
+    patch_size: int,
+) -> torch.Tensor:
+    """Grow patch_embed.proj.weight when input channels increase (C5 M1: 16 → 17).
+
+    Column layout matches forward(): each input channel contributes patch_size² coefficients
+    in order. New channel columns are zero so old checkpoints behave as an empty scratchpad.
+    """
+    if new_in_chans < old_in_chans:
+        raise ValueError(f"new_in_chans {new_in_chans} < old_in_chans {old_in_chans}")
+    if new_in_chans == old_in_chans:
+        return weight
+    pp = patch_size * patch_size
+    n_embd, old_in = weight.shape
+    expected_old = old_in_chans * pp
+    if old_in != expected_old:
+        raise ValueError(f"weight.shape[1]={old_in}, expected {expected_old} for old_in_chans={old_in_chans}")
+    out = weight.new_zeros(n_embd, new_in_chans * pp)
+    out[:, :expected_old] = weight
+    return out
+
+
 class PatchEmbed(nn.Module):
     """One shared linear map per non-overlapping P×P patch (same weights at every grid cell)."""
 

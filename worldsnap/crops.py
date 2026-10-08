@@ -48,8 +48,8 @@ DATA_ROOT = Path(__file__).resolve().parent.parent / "data"
 CROPSET = "v2"  # default; tasks_point.py imports it
 #: cropset -> establishment geometry. v4 repeats v3b's rule exactly, on purpose:
 #: the only difference between the two cropsets must be the extra planes.
-ESTAB_GEOMETRY = {"v2": "disc", "v3": "footprint", "v3b": "footprint", "v4": "footprint"}
-ESTAB_MAX_HOST_M2 = {"v3b": 1000.0, "v4": 1000.0}  # bigger hosts: a cap-area disc clipped to the footprint (estab_footprints)
+ESTAB_GEOMETRY = {"v2": "disc", "v3": "footprint", "v3b": "footprint", "v4": "footprint", "v4ns": "footprint"}
+ESTAB_MAX_HOST_M2 = {"v3b": 1000.0, "v4": 1000.0, "v4ns": 1000.0}  # bigger hosts: a cap-area disc clipped to the footprint (estab_footprints)
 CROP_M = 256
 FINE_RES, COARSE_RES = 0.25, 1.0
 GREY = [0, 85, 170, 255]  # class index -> 8-bit grey value, all three layers

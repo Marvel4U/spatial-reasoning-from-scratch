@@ -1,8 +1,11 @@
 geopandas==1.1.4
 matplotlib==3.11.2
 numpy==2.5.3
+overturemaps==1.0.2
 pandas==3.0.5
 pillow==12.3.0
+pyarrow==25.0.1
+pyogrio==0.13.0
 pyproj==3.8.0
 pytest==9.1.1
 rasterio==1.5.1

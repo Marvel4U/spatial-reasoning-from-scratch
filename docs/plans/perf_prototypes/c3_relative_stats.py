@@ -5,7 +5,7 @@ from pathlib import Path
 import numpy as np
 import geopandas as gpd
 
-REPO = Path(__file__).resolve().parents[3] if "perf_prototypes" in __file__ else Path.home() / "Github/spatial_reasoning_LLM_artifact"
+REPO = Path(__file__).resolve().parents[3]
 sys.path.insert(0, str(REPO))
 from worldsnap import crops as C
 from worldsnap.config import DISTRICTS

@@ -4,7 +4,7 @@ import glob, sys
 from pathlib import Path
 import numpy as np
 
-REPO = Path(__file__).resolve().parents[3] if "perf_prototypes" in __file__ else Path.home() / "Github/spatial_reasoning_LLM_artifact"
+REPO = Path(__file__).resolve().parents[3]
 cropset = sys.argv[1] if len(sys.argv) > 1 else "v3b"
 files = sorted(glob.glob(str(REPO / f"data/amsterdam/de_pijp/crops/{cropset}/train/*_labels.npz")))
 L = {k: np.stack([np.load(f)[f"{k}_256"] for f in files]) for k in ("noise", "surface", "estab")}
