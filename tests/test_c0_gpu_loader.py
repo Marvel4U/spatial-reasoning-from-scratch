@@ -26,6 +26,8 @@ def _fixture_loaders(encoding: str = "scalar", n_items: int = 32):
     district = config.district_data_dir()
     crops_dir = district / "crops" / config.cropset
     paths = default_task_paths(district, config.taskset)
+    if not Path(paths["train"]).is_file():
+        pytest.skip(f"c0 task data not built: {paths['train']}")
     items = load_c0_items(paths["train"], crops_dir, max_items=n_items)
     g, h = config.grid_out_size, config.img_size
     cache = LayerCache()

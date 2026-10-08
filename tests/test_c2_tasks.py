@@ -150,6 +150,8 @@ def test_task_set_ts2_singles():
 
 def test_cached_stats_match_c2_plan():
     """C2_PLAN §3: quiet sidewalk f ~ 7.7 %, quiet food & drink ~ 0.76 % (within 10 %)."""
+    if not (CROPS / STATS_FILENAME).is_file():
+        pytest.skip(f"c2 task stats not built: {CROPS / STATS_FILENAME}")
     stats = json.loads((CROPS / STATS_FILENAME).read_text())
     assert stats["n_crops"] == 2000
     assert stats["tasks"]["noise_0+surface_2"]["f"] == pytest.approx(0.077, rel=0.10)
