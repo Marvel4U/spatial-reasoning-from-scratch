@@ -15,8 +15,9 @@ own chain are averaged over connected routes only), solved_and_clean.
 
 Usage (from harness/): PYTHONPATH=. ../.venv/bin/python diagnostics/wave_rollout_eval.py RUN_ID [--n 200]
        [--mode both|scheduled|free] [--start 1|first_back] [--checkpoint PATH]
-       [--crops DIR --store NAME --split val|test] [--img-size PX --grid CELLS]
-Writes runs/diagnostics/RUN_ID/wave_rollout_eval.json.
+       [--crops DIR --store NAME --split val|test] [--img-size PX --grid CELLS] [--save-pads FILE.npz]
+Writes runs/diagnostics/RUN_ID/wave_rollout_eval.json. --save-pads also keeps the final free-running pad of every
+route (8 Oct, for harness/diagnostics/drawing_to_polyline.py, which scores the drawings with the polyline rule).
 
 Other window sizes (4 Oct): when the store's window (store.json crop_px) differs from the size the checkpoint was
 trained at, the model is rebuilt for the store's window with the same cell size (a 256 m network with 128 cells of
@@ -73,6 +74,20 @@ def iou_4m(teacher: np.ndarray, pred: np.ndarray, tol: int) -> float:
     return float(0.5 * (tp_p + tp_t) / denom) if denom > 0 else 1.0
 
 
+def save_pads(path: Path, pads: list, *, kind: str, run: str, checkpoint: str, store: str, split: str, crop: int,
+              grid: int, origin: np.ndarray, markers: np.ndarray, eval_json: str) -> None:
+    """Final drawings (route ids, packed (n, g, g/8) pads) plus the store's origins and markers of those routes, so a
+    reader can check that its route list lines up with the store the drawings were made on."""
+    rix = np.array([r for r, _ in pads], np.int64)
+    pad = np.packbits(np.stack([m for _, m in pads]).astype(bool), axis=-1)
+    meta = dict(kind=kind, run=run, checkpoint=checkpoint, store=store, split=split, crop=int(crop), grid=int(grid),
+                cell_m=float(crop // grid), eval_json=eval_json)
+    path = Path(path); path.parent.mkdir(parents=True, exist_ok=True)
+    np.savez_compressed(path, route=rix, pad=pad, origin=np.asarray(origin)[rix], markers=np.asarray(markers)[rix],
+                        meta=np.array(json.dumps(meta)))
+    print("wrote", path, f"({len(rix)} pads)")
+
+
 def eval_geometry(trained_img: int, trained_grid: int, store_crop: int, img_size: int | None = None,
                   grid: int | None = None) -> tuple[int, int]:
     """(img_size, grid) the model is built with: the store's window, and the trained cell size kept on it
@@ -106,6 +121,7 @@ def main() -> int:
     ap.add_argument("--tag", default=None, help="suffix of the output file (default: from crops/store/split when given)")
     ap.add_argument("--img-size", type=int, default=None, help="build the model for this window in px (default: the store's crop_px)")
     ap.add_argument("--grid", type=int, default=None, help="output cells per side (default: keep the trained cell size)")
+    ap.add_argument("--save-pads", type=Path, default=None, help="npz with the final free-running pad per route")
     args = ap.parse_args()
     overrides = ws._overrides_for_run(args.run_id)
     meta_path = Path(config.diagnostics_dir) / args.run_id / "meta.json"
@@ -153,6 +169,7 @@ def main() -> int:
     start_mode = args.start
 
     sched_rows, free_rows, per_pass = [], [], {}
+    free_pads = []                                            # (route, final pad) for --save-pads
     n_done = 0
     for rix in range(min(args.n, loader.n_routes)):
         goal_m = float(goal_all[rix])
@@ -223,6 +240,7 @@ def main() -> int:
             row = dict(route=rix, n_goal=n_goal, goal_m=goal_m, passes=len(toks), passes_teacher=len(want), finished=float(stop == "done"),
                        stop=stop, tokens_as_teacher=float(toks == want))
             p_np = pad.cpu().numpy()
+            free_pads.append((rix, p_np.astype(bool)))
             row.update({"final_" + k: v for k, v in route_score(p_np, start_c, goal_c, blocked, goal_m, cell_m).items()})
             row["final_iou4m_vs_teacher_path"] = iou_4m(teacher_final, p_np, tol)
             row["success_and_finished"] = float(row["final_success"] == 1.0 and stop == "done")
@@ -272,6 +290,9 @@ def main() -> int:
         tag = ""
     name = f"wave_rollout_eval{tag}.json" if start_mode == "1" else f"wave_rollout_eval_{start_mode}{tag}.json"
     (odir / name).write_text(json.dumps(out, indent=1), encoding="utf-8")
+    if args.save_pads is not None and free_pads:
+        save_pads(args.save_pads, free_pads, kind="wave", run=args.run_id, checkpoint=str(ckpt), store=str(store),
+                  split=args.split, crop=crop, grid=grid, origin=origin, markers=markers, eval_json=str(odir / name))
     print(json.dumps(out, indent=1))
     print("wrote", odir / name)
     return 0

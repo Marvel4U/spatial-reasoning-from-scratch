@@ -20,7 +20,8 @@ flip.
 
 Usage (from harness/): PYTHONPATH=. python diagnostics/oneshot_route_eval.py RUN_ID [--n 500] [--task detour]
        [--crops DIR --store NAME --split val|test] [--checkpoint PATH] [--batch 16] [--threads 3] [--tag SUFFIX]
-       [--img-size PX --grid CELLS]
+       [--img-size PX --grid CELLS] [--save-pads FILE.npz]
+--save-pads keeps the thresholded mask of every route (for harness/diagnostics/drawing_to_polyline.py).
 Writes runs/diagnostics/RUN_ID/oneshot_route_eval{tag}.json; tag as in wave_rollout_eval.py (empty for the run's own
 store and split, else _{district}_{store}_{split}). Runs on the CPU when CUDA_VISIBLE_DEVICES is empty."""
 from __future__ import annotations
@@ -37,7 +38,7 @@ import data
 import grid_vit_adapter
 from checkpoints import checkpoint_model_config
 from diagnostics import wave_search_rollout as ws
-from diagnostics.wave_rollout_eval import eval_geometry, iou_4m, route_score
+from diagnostics.wave_rollout_eval import eval_geometry, iou_4m, route_score, save_pads
 from plain_gpt_module.checkpoint import read_checkpoint
 from plain_gpt_module.local_config import LocalGridViTConfig
 from plain_gpt_module.local_grid_vit import LocalGridViT
@@ -157,6 +158,7 @@ def main() -> int:
     ap.add_argument("--tag", default=None, help="suffix of the output file (default: from crops/store/split when given)")
     ap.add_argument("--img-size", type=int, default=None, help="build the model for this window in px (default: the store's crop_px)")
     ap.add_argument("--grid", type=int, default=None, help="output cells per side (default: keep the trained cell size)")
+    ap.add_argument("--save-pads", type=Path, default=None, help="npz with the thresholded mask per route")
     args = ap.parse_args()
 
     setup = configure_for_run(args.run_id, args.crops, args.store, args.img_size, args.grid, args.threads)
@@ -209,6 +211,10 @@ def main() -> int:
         tag = ""
     path = odir / f"oneshot_route_eval{tag}.json"
     path.write_text(json.dumps(out, indent=1), encoding="utf-8")
+    if args.save_pads is not None:
+        save_pads(args.save_pads, list(zip(todo, pred)), kind="oneshot", run=args.run_id, checkpoint=str(ckpt),
+                  store=str(store), split=args.split, crop=crop, grid=grid, origin=geo[1], markers=geo[2],
+                  eval_json=str(path))
     print(json.dumps({k: v for k, v in out.items() if k != "oneshot_per_route"}, indent=1))
     print("wrote", path)
     return 0

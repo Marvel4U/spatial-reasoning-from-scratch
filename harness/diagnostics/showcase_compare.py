@@ -12,6 +12,11 @@ markers #343A46, drawing #E86A17):
 Panels 3 and 4 are titled solved / not solved by route_score of wave_rollout_eval.py and their lit-cell count. Plus one
 contact sheet of all routes.
 
+Optional fifth panel (8 Oct): `--polyline-pred FILE --polyline-export DIR [--polyline-label NAME]` adds a polyline
+prediction in the Track A format (image pixels, e.g. a Qwen LoRA's pred_val_v1_n500.jsonl) for the routes of that
+export's store and split that have a prediction, titled by the polyline rule (spatial_data/track_a_export.py score).
+Those routes are written as ..._route{NNN}_polyline.png (the four-panel picture is written as well).
+
 Each model is run with its own training config (meta.json + ledger overrides, marker radius, encoding, window and
 grid), so a one-shot model with 64 cells (4 m) can sit next to a search with 128 cells (2 m); the global config is
 restored between the two.
@@ -24,6 +29,7 @@ Writes runs/diagnostics/ONESHOT_RUN/showcase_vs_search/{district}_{store}_{split
 from __future__ import annotations
 
 import argparse
+import json
 import types
 from pathlib import Path
 
@@ -163,11 +169,34 @@ def _verdict(sc: dict) -> str:
                                                    "not solved (crosses a building)")
 
 
-def route_figure(key: tuple, srch: dict, one: dict, oneshot_id: str, search_id: str) -> Image.Image:
+def load_polyline_preds(pred_path: Path, export_dir: Path) -> dict:
+    """route -> (record, points) for a Track A prediction file, with the polyline-rule verdict of each route."""
+    import sys
+    sys.path.insert(0, str(config.REPO_ROOT))
+    from spatial_data import track_a_export as TA
+    recs = {r["route"]: r for r in TA.load_routes(export_dir / "routes.jsonl")}
+    preds = TA.load_predictions(pred_path)
+    out = {}
+    for rix, pts in preds.items():
+        if rix in recs:
+            res = TA.score_polyline(pts, recs[rix], TA.load_building_mask(recs[rix]))
+            out[rix] = dict(record=recs[rix], points=pts, score=res)
+    return out
+
+
+def _poly_verdict(res: dict) -> str:
+    if res["solved"]:
+        return f"solved (length x{res['length_ratio']:.2f})"
+    return f"not solved ({res['reason']}" + (f", x{res['length_ratio']:.2f})" if res["reason"] == "too long" else ")")
+
+
+def route_figure(key: tuple, srch: dict, one: dict, oneshot_id: str, search_id: str, poly: dict | None = None,
+                 poly_label: str = "") -> Image.Image:
     crops, store, split, rix = key
     crop = srch["crop"]; scale = max(1, 512 // crop); P = crop * scale
     gap, top, head = 14, 58, 52
-    W = 4 * P + 5 * gap; H = head + top + P + gap
+    n_pan = 5 if poly is not None else 4
+    W = n_pan * P + (n_pan + 1) * gap; H = head + top + P + gap
     im = Image.new("RGB", (W, H), (255, 255, 255)); d = ImageDraw.Draw(im)
     f_big, f_mid, f_small = font(22), font(17), font(14)
     place = PLACE.get(Path(crops).parts[-3], Path(crops).parts[-3])
@@ -182,11 +211,20 @@ def route_figure(key: tuple, srch: dict, one: dict, oneshot_id: str, search_id: 
         (f"search ({srch['passes']} passes, {srch['stop']}): {_verdict(srch['score'])}",
          f"{srch['score']['lit_cells']:.0f} lit cells of {crop // g2} m", srch["mask"]),
     ]
+    if poly is not None:
+        n_pts = len(poly["points"]) if isinstance(poly["points"], list) else 0
+        panels.append((f"{poly_label}: {_poly_verdict(poly['score'])}", f"polyline of {n_pts} points, polyline rule", None))
     for i, (t1, t2, m) in enumerate(panels):
         x = gap + i * (P + gap)
         d.text((x, head + 4), t1, fill=(20, 20, 20), font=f_mid)
         d.text((x, head + 28), t2, fill=(110, 110, 110), font=f_small)
         im.paste(_panel(srch["bld"], srch["markers"], m, scale), (x, head + top))
+        if poly is not None and i == 4 and isinstance(poly["points"], list) and len(poly["points"]) >= 2:
+            ppm = float(poly["record"]["px_per_m"])            # image px -> window metres -> panel px
+            xy = [(x + float(px) / ppm * scale, head + top + float(py) / ppm * scale) for px, py in poly["points"]]
+            d.line(xy, fill=PAD, width=4, joint="curve")
+            for q in xy:
+                d.ellipse([q[0] - 3, q[1] - 3, q[0] + 3, q[1] + 3], fill=PAD)
         for (mx, my), name in zip(srch["markers"], ("start", "goal")):
             d.text((x + int(mx) * scale + 10, head + top + int(my) * scale - 8), name, fill=MAP, font=f_small)
     return im
@@ -203,7 +241,15 @@ def main() -> int:
     ap.add_argument("--out", type=Path, default=None)
     ap.add_argument("--threads", type=int, default=3)
     ap.add_argument("--fp32-cpu", action="store_true", help="run the search in float32 on the CPU (default: bf16 autocast, as on the GPU)")
+    ap.add_argument("--polyline-pred", type=Path, default=None, help="Track A prediction jsonl for a fifth panel")
+    ap.add_argument("--polyline-export", type=Path, default=None, help="the Track A export dir of those predictions")
+    ap.add_argument("--polyline-label", default="Qwen", help="title of the fifth panel")
     args = ap.parse_args()
+    poly, poly_key = {}, None
+    if args.polyline_pred is not None:
+        poly = load_polyline_preds(args.polyline_pred, args.polyline_export)
+        meta = json.loads((args.polyline_export / "export.json").read_text())["args"]
+        poly_key = (Path(meta["store"]).parts[-4], Path(meta["store"]).name, meta["split"])   # district, store, split
 
     if args.route:
         todo = [(c, s, sp, int(r), "256") for c, s, sp, r in args.route]
@@ -226,6 +272,11 @@ def main() -> int:
             im = route_figure((crops, store, split, rix), srch[rix], one[rix], one_id, search_id)
             path = odir / f"{Path(crops).parts[-3]}_{store}_{split}_route{rix:03d}.png"
             im.save(path); figs.append(im)
+            if poly_key == (Path(crops).parts[-3], store, split) and rix in poly:
+                imp = route_figure((crops, store, split, rix), srch[rix], one[rix], one_id, search_id, poly[rix], args.polyline_label)
+                pp = odir / f"{Path(crops).parts[-3]}_{store}_{split}_route{rix:03d}_polyline.png"
+                imp.save(pp)
+                print(f"{pp.name}: {args.polyline_label} {_poly_verdict(poly[rix]['score'])}")
             print(f"{path.name}: one-shot {_verdict(one[rix]['score'])} ({one[rix]['score']['lit_cells']:.0f} cells) | "
                   f"search {_verdict(srch[rix]['score'])} ({srch[rix]['score']['lit_cells']:.0f} cells, {srch[rix]['passes']} passes)")
     _reset_config()
