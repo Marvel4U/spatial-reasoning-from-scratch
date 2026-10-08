@@ -1,6 +1,6 @@
 # Track A plan: Qwen3-VL on the path task — vanilla, then fine-tuned (4 Oct 2026)
 
-Marvin builds this in Cursor; Claude delivers the shared data contract (§1) and stays out of the model code.
+Marvin built the model side (`qwen_reference/`, `qwen_fine_tuning/`); the shared data contract (§1) was built separately. Results: `docs/reports/TRACK_A_QWEN_VANILLA_AND_SFT_2026-10-08.md`.
 Background: `docs/memo/TRACK_A_BACKBONES_2026-10-01.md` (the two models, module paths, token geometry),
 `docs/reports/C5_WAVE_SEARCH_2026-10-03.md` (our own network's numbers, the success rule).
 

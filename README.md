@@ -51,7 +51,7 @@ Animations, one frame per pass (all in `docs/figures/`): [De Pijp, 424 m](docs/f
 
 **Larger windows and the mazes.** At 512 m the routes reach 1.1 km walking and up to 28 fronts. The 256 m network continued at 512 m on the Zuid + Centrum routes, plus one round of natural noise at that size, solves **42 %** of 500 Zuid + Centrum 512 m val routes: 91 / 71 / 53 / 30 / 4 % for 2–3 / 4–5 / 6–8 / 9–12 / 13+ fronts (`c5_r5_wave_nat3_tok01_ownp50_r1_L4_16k_g256_b64_zc512`; report §4.7). On the 512 m house maze it solves 40 % before that round and 39 % after (`c5_r5_wave_nat3_tok01_from_ownp50_L4_16k_g256_b64_zc512`, the hero network). A thin-wall maze (walls 2–6 m) fails zero-shot: 4 % solved, the first pass already draws a round ring straight through the walls (48k network; report §7). The network learnt to run the wave around building-sized obstacles, the kind it was trained on, not around obstacles of any shape.
 
-**The cleanup pass.** The draw pass given a real job: input the network's own final drawing, target the shortest chain through its own lit cells (or the teacher's path when that chain is not a success), with a lower lit-cell weight on that pass. At draw weight 3 the network keeps 70 % of De Pijp val solved and triples the share of clean final drawings (at most 1.25 × the cells of the thin chain) from 14 % to 42 %: a trade of 8 points of success for cleanliness, not a free improvement (`c5_r5_wave_nat3_tok01_cleanup100_dw3_ownp50_r2_L4_16k_g128_store100k`; report §4.8). At 512 m: [[512 NUMBERS: cleanup / one-shot 512]].
+**The cleanup pass.** The draw pass given a real job: input the network's own final drawing, target the shortest chain through its own lit cells (or the teacher's path when that chain is not a success), with a lower lit-cell weight on that pass. At draw weight 3 the network keeps 70 % of De Pijp val solved and triples the share of clean final drawings (at most 1.25 × the cells of the thin chain) from 14 % to 42 %: a trade of 8 points of success for cleanliness, not a free improvement (`c5_r5_wave_nat3_tok01_cleanup100_dw3_ownp50_r2_L4_16k_g128_store100k`; report §4.8). At 512 m the same recipe fails: 18 % solved against 42 % before, and only 30 % of routes finish with DONE (`c5_r5_wave_nat3_tok01_cleanup100_dw3_ownp50_r2_L4_16k_g256_b64_zc512`; report §4.8), so the cleanup pass is a 256 m result and a negative result at 512 m. The budget-matched one-shot network continued at 512 m solves 19 % of the 512 m routes against the search's 42 %, and 14 % against 40 % on the 512 m house maze (`c5_os_bld_det_from64k_L4_32k_g256_b64_zc512`; report §4.9).
 
 **Timing.** On the RTX 3060 in bf16, one pass takes 2.4 ms at batch 1; a whole free-running route, one at a time with the loop around it, 57 ms on average (10.3 passes, grid and token as two forwards per pass) (48k network; report §4.5).
 
@@ -59,7 +59,21 @@ Animations, one frame per pass (all in `docs/figures/`): [De Pijp, 424 m](docs/f
 
 Three systems on the same De Pijp validation routes: the one-shot network (the same 4-block transformer without scratchpad, trained to draw the path in one pass for 64k steps, the search's total training budget: `c5_os_bld_det_L4_64k_g128_store100k`), the search, and Qwen3-VL-2B fine-tuned with LoRA on 19.3k routes. They were first scored by different rules (cells on a scratchpad for the two small networks, a polyline for Qwen); the table puts everyone under one rule, the polyline rule: start and end within 6 m of the markers, no building crossed, length at most 1.10 × the teacher's walking length.
 
-[[COMPARISON TABLE]]
+Solved share by the polyline rule, De Pijp validation routes (n = 500; the two vanilla rows n = 200 and their fronts columns cover those 200 routes). ◆ = drawn on a scratchpad and converted to a polyline (the shortest chain through the lit cells, simplified as the teacher's lines are; `harness/diagnostics/drawing_to_polyline.py`). Full table with Zuid + Centrum and the house maze, the failure mix and every source file: `docs/reports/COMPARISON_TABLE_2026-10-08.md`.
+
+| method | all | 2–3 fronts | 4–5 | 6+ | never-seen district | house maze |
+|---|---:|---:|---:|---:|---:|---:|
+| straight line between the markers (floor) | 27.6 % | 73 % | 36 % | 2 % | 28 % | 21 % |
+| Qwen3-VL-2B, zero-shot (n = 200) | 2.5 % | 6 % | 2 % | 0 % | – | – |
+| Qwen3-VL-4B, zero-shot (n = 200) | 24.5 % | 35 % | 35 % | 2 % | – | – |
+| Qwen3-VL-2B + LoRA on 1k routes | 21.4 % | 58 % | 28 % | 1 % | – | – |
+| Qwen3-VL-2B + LoRA on 5k routes | 31.0 % | 74 % | 38 % | 8 % | – | – |
+| Qwen3-VL-2B + LoRA on 19.3k routes | 49.6 % | 81 % | 62 % | 28 % | – | – |
+| ◆ one-shot, 4 blocks, 64k steps | 37.4 % | 83 % | 40 % | 15 % | 31 % | 16 % |
+| ◆ **wave search**, 4 blocks | **76.4 %** | **93 %** | **87 %** | **63 %** | **57 %** | **44 %** |
+| ◆ wave search + cleanup pass | 46.2 % | 82 % | 54 % | 26 % | 40 % | 32 % |
+
+The search's number hardly depends on the rule (77.6 % under its own cell rule, 76.4 % here): when it connects, the line is valid in 382 of 395 cases. The cleanup network loses 24 points under this rule: its thin lines hug building corners and touch building pixels the cell rule forgives (1.5 % of its chain cells against 0.2 % for the plain search), which points at its targets, accepted under the lenient cell rule. The one-shot numbers could be up to about 3 points higher with a friendlier cell-to-pixel conversion; the ranking does not change.
 
 Under the search's own cell rule the budget-matched one-shot network solves 46 % of De Pijp val against the search's 78 %, 35 % against 60 % on the never-seen district, and 18 % against 51 % on the house maze; four times the training of the earlier one-shot run (16k → 64k steps) did not move it, and the gap grows with route length everywhere (report §4.9). A single pass has no more steps to spend on a longer route.
 

@@ -1,6 +1,6 @@
 # Report: the wave search — one network runs a path search on its own scratchpad (rung C5)
 
-Written 3 Oct 2026 by Claude from Marvin's runs of 1–2 Oct and the evaluations of 2–3 Oct. **Draft for Marvin's review.** Every number is copied from a file; the source is given in square brackets after it, using the keys of the source list directly below. Numbers that are still being measured are marked `[[NEW MAP: pending]]` or `[[pending]]`; nothing in those places is estimated.
+Written 3 Oct 2026 by Claude from Marvin's runs of 1–2 Oct and the evaluations of 2–3 Oct. Every number is copied from a file; the source is given in square brackets after it, using the keys of the source list directly below. 
 
 **Sources (keys used in the text).**
 
