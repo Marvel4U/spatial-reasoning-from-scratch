@@ -73,6 +73,10 @@ Solved share by the polyline rule, De Pijp validation routes (n = 500; the two v
 | ◆ **wave search**, 4 blocks | **76.4 %** | **93 %** | **87 %** | **63 %** | **57 %** | **44 %** |
 | ◆ wave search + cleanup pass | 46.2 % | 82 % | 54 % | 26 % | 40 % | 32 % |
 
+![The same three De Pijp val routes solved by six methods](docs/figures/method_comparison_3_routes.png)
+
+*Three of the first 200 De Pijp val routes, one per column, picked by the polyline-rule verdicts: route 188 (4 fronts) is solved by Qwen + LoRA and not by the search, route 192 (9 fronts) by the search and not by Qwen, and route 154 (7 fronts) by neither; every subtitle is the polyline rule's verdict (`harness/diagnostics/method_grid_figure.py --auto`). Look at how they fail: the Qwen polylines cut through building corners or whole blocks, while the wave search stays on the street and fails by gaps, a drawing that never connects start and goal.*
+
 The search's number hardly depends on the rule (77.6 % under its own cell rule, 76.4 % here): when it connects, the line is valid in 382 of 395 cases. The cleanup network loses 24 points under this rule: its thin lines hug building corners and touch building pixels the cell rule forgives (1.5 % of its chain cells against 0.2 % for the plain search), which points at its targets, accepted under the lenient cell rule. The one-shot numbers could be up to about 3 points higher with a friendlier cell-to-pixel conversion; the ranking does not change.
 
 Under the search's own cell rule the budget-matched one-shot network solves 46 % of De Pijp val against the search's 78 %, 35 % against 60 % on the never-seen district, and 18 % against 51 % on the house maze; four times the training of the earlier one-shot run (16k → 64k steps) did not move it, and the gap grows with route length everywhere (report §4.9). A single pass has no more steps to spend on a longer route.
