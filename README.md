@@ -324,7 +324,7 @@ python -m pytest tests -q          # data-dependent tests skip without the sampl
 | `c5_wave_search_512m_hero.pt` | 35.5 MB | `c5_r5_wave_nat3_tok01_from_ownp50_L4_16k_g256_b64_zc512` | the search at 512 m before that round, the network of Figure 1 |
 | `c5_oneshot_256m_matched.pt` | 35.4 MB | `c5_os_bld_det_L4_64k_g128_store100k` | the budget-matched one-shot network (64k steps, no scratchpad) |
 | `qwen3vl2b_lora_route_v1_19k.zip` | 25.9 MB | Track A `lora20000_v1` | LoRA adapter for Qwen3-VL-2B-Instruct, 19.3k training routes; the base weights are not included |
-| `eval_bundle_v0.2.tar.gz` | 35.3 MB | – | the evaluation inputs: district label stacks, the validation route stores of De Pijp, Zuid + Centrum (256 m, 512 m) and the house maze (256 m, 512 m), the three Track A validation exports, and the per-route results and final drawings of the seven runs behind Sections 5 and 7 |
+| `eval_bundle_v0.2.tar.gz` | 37.3 MB | – | the evaluation inputs: district label stacks (the Amsterdam ones under ODbL 1.0, `DATA_LICENSES.md`), the validation route stores of De Pijp (with its test split), Zuid + Centrum (256 m, 512 m) and the house maze (256 m, 512 m), the three Track A validation exports, and the per-route results and final drawings of the seven runs behind Sections 5 and 7 |
 | `qwen_val_predictions_v0.2.tar.gz` | 0.2 MB | Track A `qwen_vanilla`, `lora{1000,5000,20000}_v1` | the Qwen predictions and evaluation reports behind Tables 4–6 |
 
 ### 9.4 Authorship is recorded per component

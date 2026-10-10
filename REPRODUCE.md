@@ -175,7 +175,7 @@ the released `.pt` files are renamed on placement (or passed with `--checkpoint 
 
 `eval_bundle_v0.2.tar.gz` holds, in the repository's layout, the district label stacks (`district_labels_1m.npz` and
 its legend) of De Pijp, Zuid + Centrum and the house maze, the validation route stores used in the paper (De Pijp
-`c4_100k` val; Zuid + Centrum `c4_256_val` val and test and `c4_512_20k` val; house maze `c4_256_val` and `c4_512_val`
+`c4_100k` val and test; Zuid + Centrum `c4_256_val` val and test and `c4_512_20k` val; house maze `c4_256_val` and `c4_512_val`
 val), the three Track A validation exports with their baselines and published polyline predictions, and the
 per-route evaluation JSONs, `meta.json` and final drawings (`pads_*.npz`) of the seven runs the paper's search and
 one-shot numbers come from. `qwen_val_predictions_v0.2.tar.gz` holds the Qwen predictions and evaluation reports.
@@ -207,8 +207,9 @@ cd harness; export PYTHONPATH=.
 R256=c5_r5_wave_nat3_tok01_ownp50_from48k_L4_16k_g128_store100k
 R512=c5_r5_wave_nat3_tok01_ownp50_r1_L4_16k_g256_b64_zc512
 RH=c5_r5_wave_nat3_tok01_from_ownp50_L4_16k_g256_b64_zc512
-# (a) the 256 m search, free-running, De Pijp val (Table 3)
+# (a) the 256 m search, free-running, De Pijp val and test (Table 3)
 python diagnostics/wave_rollout_eval.py $R256 --n 500 --mode free --tag _verify_val500
+python diagnostics/wave_rollout_eval.py $R256 --n 500 --mode free --split test --tag _verify_test
 # (b) the never-seen district and the house maze (Table 3)
 python diagnostics/wave_rollout_eval.py $R256 --n 500 --mode free --crops ../data/amsterdam/zuid_centrum/crops/v4ns --store c4_256_val --tag _verify_zc256
 python diagnostics/wave_rollout_eval.py $R256 --n 500 --mode free --crops ../data/synthetic/maze_v2_houses/crops/v4ns --store c4_256_val --tag _verify_maze256
@@ -239,6 +240,7 @@ without `--rerun` (the cleanup network itself is not released).
 | check | paper | obtained | routes that differ |
 |---|---:|---:|---:|
 | (a) 256 m search, De Pijp val, cell rule (Table 3) | 77.6 % (78 %) | 77.6 % | 0 / 500 |
+| (a) 256 m search, De Pijp test, cell rule (Table 3) | 72.8 % (73 %) | 72.8 % | – (the published file holds aggregates only; all of them agree, per front count and stop reason included) |
 | (b) 256 m search, Zuid + Centrum 256 m val (Table 3) | 59.6 % (60 %) | 59.6 % | 0 / 500 |
 | (b) 256 m search, house maze 256 m val (Table 3) | 50.8 % (51 %) | 50.8 % | 0 / 500 |
 | (c) 512 m search, Zuid + Centrum 512 m val (Section 5.4) | 42.2 % (42 %) | 42.2 % | 0 / 500 |
@@ -250,15 +252,15 @@ without `--rerun` (the cleanup network itself is not released).
 | (f) straight line between the markers (Table 5) | 27.6 % | 27.6 % | – (baseline file byte-identical) |
 | (f) LoRA 1k / 5k; zero-shot 2B / 4B two-pass (n = 200) | 21.4 / 31.0 / 2.5 / 24.5 % | 21.4 / 31.0 / 2.5 / 24.5 % | – |
 
-Every route agrees with the published per-route results, including the long 512 m rollouts, so on the same GPU type,
+Every route agrees with the published per-route results, including the long 512 m rollouts (the De Pijp test row, published as aggregates only, agrees in every aggregate), so on the same GPU type,
 PyTorch build and bf16 the release reproduces the paper exactly. On other hardware or on the CPU a few long routes
 can flip (Section 8.6 of the README: 4 of 200 routes, all with 6–9 fronts, between a CPU and a GPU run of the 256 m
 network). Scripts fixed for this check: the evaluation scripts used to apply the data, checkpoint and ledger
 directories recorded in a run's `meta.json`, i.e. the training machine's paths; they now keep the clone's own, and
 `drawing_to_polyline.py` resolves the repo-relative paths of the released drawings.
 
-Not reproducible from the release alone: the De Pijp **test** row of Table 3 (73 %) and every training number (the
-bundle holds validation stores only, and the training stores are 2–7 GB); the 48k network before natural noise, the
+Not reproducible from the release alone: every training number (the bundle holds the validation stores and the De Pijp
+test split only, and the training stores are 2–7 GB); the 48k network before natural noise, the
 2-block control, the second natural-noise round, the cleanup network and the 512 m one-shot network (not released;
 their published per-route JSONs are in the bundle, and the cleanup and one-shot drawings can be rescored); the Qwen
 generations themselves, which need the base model (`models/download_qwen.py`) and the released adapter
