@@ -21,7 +21,14 @@ the grid methods' drawings are converted to the shortest chain through their lit
 
 Colours as wave_rollout_gif.py: ground #F5F3EE, buildings and markers #343A46, drawing #E86A17, grey boxes.
 
-Usage (from harness/, CPU only): PYTHONPATH=. python diagnostics/concept_three_methods_figure.py [--out PNG ...]
+--lane wave (10 Oct) draws only the wave-search lane as a standalone figure (about 1600 x 560 px, no title inside):
+map + markers + scratchpad (pass 4) -> transformer, 4 blocks, one pass -> next scratchpad + the state-token chip, the
+feedback arrow back to the input, and below a strip of the scratchpad after passes STRIP (fronts spreading, the way
+back, the final drawing), each labelled with its pass number and the state it ran in -> the token it said. Default
+output docs/memo/wave_search_2026-10-05/concept_wave_search.png (public copy: docs/figures/concept_wave_search.png).
+
+Usage (from harness/, CPU only): PYTHONPATH=. python diagnostics/concept_three_methods_figure.py [--lane all|wave]
+       [--out PNG ...]
 """
 from __future__ import annotations
 
@@ -53,6 +60,7 @@ ONESHOT = "c5_os_bld_det_L4_64k_g128_store100k"
 WAVE = "c5_r5_wave_nat3_tok01_ownp50_from48k_L4_16k_g128_store100k"
 LORA = ROOT / "runs/qwen_sft/lora20000_v1/pred_val_v1_n500.jsonl"
 PASS_IN, PASS_OUT = 4, 5                                     # the scratchpads shown in the wave lane
+STRIP = (1, 5, 9, 13)                                        # --lane wave: passes in the strip (+ the last pass)
 
 
 def unpack(z, grid: int) -> np.ndarray:
@@ -211,10 +219,97 @@ def figure(out: list[Path]):
     plt.close(fig)
 
 
+def wave_figure(out: list[Path]):
+    """--lane wave: the wave-search lane alone, larger, with a strip of the progression of route 192."""
+    rec = next(r for r in TA.load_routes(EXPORT / "routes.jsonl") if r["route"] == ROUTE)
+    bmask = TA.load_building_mask(rec)
+    zf = np.load(ROOT / f"runs/diagnostics/{WAVE}/wave_search_route{ROUTE}_frames.npz")
+    frames = unpack(zf, int(zf["grid"])); titles = [str(t) for t in zf["titles"]]
+    zw = np.load(ROOT / f"runs/diagnostics/{WAVE}/pads_wave.npz")
+    final = unpack(zw, int(json.loads(str(zw["meta"]))["grid"]))[list(zw["route"]).index(ROUTE)]
+    if not (frames[-1] == final).all():
+        raise SystemExit("the saved frames do not end in the drawing of pads_wave.npz; re-run wave_rollout_gif.py --save-frames")
+    passes = {}                                                # pass number -> (frame index, state, said)
+    for i, t in enumerate(titles):
+        if t.startswith("pass "):
+            head, rest = t.split(":", 1)
+            state, said = (x.strip().split()[-1] for x in rest.split("->"))
+            passes[int(head.split()[1])] = (i, state, said)
+    last = max(passes)
+    if passes[last][0] != len(titles) - 1:
+        raise SystemExit("the last saved frame is not the last pass")
+
+    W, H = 1600, 575
+    fig = plt.figure(figsize=(W / 100, H / 100), dpi=100)
+    ax = fig.add_axes((0, 0, 1, 1)); ax.set_xlim(0, W); ax.set_ylim(H, 0); ax.axis("off")
+    fig.patch.set_facecolor("white")
+    FS, FC = 16, 15                                            # body text, captions (pt at 100 dpi)
+
+    # ---------------- the loop: one pass, its output is the next input (centred)
+    S, BW, AW, CW = 180, 230, 64, 116                          # thumbnail, box, arrow, token-chip widths
+    x_in = (W - (S + AW + BW + AW + S + 20 + CW)) / 2
+    y = 88; cy = y + S / 2
+    img(ax, x_in, y, S, thumb(rec, bmask, pad=frames[passes[PASS_IN][0]]))
+    ax.text(x_in - 16, cy, f"map\n+ the two markers\n+ scratchpad\n(pass {PASS_IN})", ha="right", va="center",
+            fontsize=FC, color=SUB, linespacing=1.3)
+    arrow(ax, x_in + S + 8, cy, x_in + S + AW - 6, cy)
+    xb = x_in + S + AW
+    box(ax, xb, cy - 60, BW, 120, "transformer,\n4 blocks,\none pass", fs=FS + 1)
+    arrow(ax, xb + BW + 6, cy, xb + BW + AW - 8, cy)
+    x_out = xb + BW + AW
+    img(ax, x_out, y, S, thumb(rec, bmask, pad=frames[passes[PASS_OUT][0]]))
+    ax.text(x_out + S / 2, y + S + 8, f"next scratchpad (pass {PASS_OUT})", ha="center", va="top", fontsize=FC,
+            color=SUB)
+    said = passes[PASS_OUT][2]
+    tx = x_out + S + 20; ty = y + 22
+    ax.text(tx, ty - 2, "+ a state token", fontsize=FC, color=SUB, va="bottom")
+    for j, t in enumerate(("SEARCH", "BACK", "DRAW", "DONE")):
+        on = t == said
+        box(ax, tx, ty + 6 + j * 36, CW, 30, t, fs=13.5, fc=C_PAD if on else "white", ec=C_PAD if on else BOX_EDGE,
+            color="white" if on else TXT, weight="bold" if on else "normal", r=6)
+    # feedback arrow: from the output back to the input
+    ax.add_patch(FancyArrowPatch((x_out + S / 2, y - 4), (x_in + S / 2, y - 4), connectionstyle="arc3,rad=0.16",
+                                 arrowstyle="-|>", mutation_scale=20, lw=2.2, color=C_PAD))
+    ax.text((x_in + x_out + S) / 2, y - 46, "output i = input i+1; the state token picks the next pass; "
+            "nothing else runs between passes", ha="center", va="bottom", fontsize=FS - 1, color=C_PAD,
+            weight="bold", linespacing=1.2, bbox=dict(fc="white", ec="none", pad=1))
+
+    # ---------------- the strip: route 192 pass by pass
+    sp = [p for p in STRIP if p < last] + [last]
+    s2, gap = 150, 72
+    x2 = (W - (len(sp) * s2 + (len(sp) - 1) * gap)) / 2; y2 = 362
+    ax.add_line(plt.Line2D((40, W - 40), (318, 318), color=BOX_EDGE, lw=1, ls=(0, (4, 4))))
+    ax.text(W / 2, y2 - 12, f"De Pijp val route {ROUTE} (350 m walk): the scratchpad after pass …  "
+            "(state the pass ran in → token it said)", ha="center", fontsize=FC, color=TXT, va="bottom")
+    for k, p in enumerate(sp):
+        i, state, sd = passes[p]
+        xk = x2 + k * (s2 + gap)
+        img(ax, xk, y2, s2, thumb(rec, bmask, pad=frames[i]))
+        lab = f"pass {p}" + (" (final)" if p == last else "")
+        ax.text(xk + s2 / 2, y2 + s2 + 7, lab, ha="center", va="top", fontsize=FC, color=TXT, weight="bold")
+        ch = sd != state
+        ax.text(xk + s2 / 2, y2 + s2 + 30, f"{state} → {sd}", ha="center", va="top", fontsize=FC - 1,
+                color=C_PAD if ch else SUB, weight="bold" if ch else "normal")
+        if k:
+            arrow(ax, xk - gap + 10, y2 + s2 / 2, xk - 10, y2 + s2 / 2)
+    for o in out:
+        o.parent.mkdir(parents=True, exist_ok=True)
+        fig.savefig(o, dpi=100, facecolor="white")
+        print("wrote", o, Image.open(o).size, "strip passes", sp)
+    plt.close(fig)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    ap.add_argument("--out", type=Path, nargs="+", default=[ROOT / "docs/memo/wave_search_2026-10-05/concept_three_methods.png"])
-    figure(ap.parse_args().out)
+    ap.add_argument("--lane", choices=("all", "wave"), default="all",
+                    help="all: the three-lane figure; wave: only the wave-search lane, standalone")
+    ap.add_argument("--out", type=Path, nargs="+", default=None)
+    a = ap.parse_args()
+    memo = ROOT / "docs/memo/wave_search_2026-10-05"
+    if a.lane == "wave":
+        wave_figure(a.out or [memo / "concept_wave_search.png"])
+    else:
+        figure(a.out or [memo / "concept_three_methods.png"])
     return 0
 
 
