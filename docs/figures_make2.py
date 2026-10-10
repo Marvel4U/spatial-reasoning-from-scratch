@@ -95,6 +95,7 @@ def fig_f0():
         key = (round(t[4], 4), int(t[2].sum()))
         if key not in seen: seen.add(key); uniq.append(t)
     picks = [t[1:] for t in sorted(uniq[:4], key=lambda t: -t[4])]
+    picks = [picks[0], picks[2]]   # 10 Oct: the README keeps the first and third of the four (old: figures/archive/F0_hero_detour_4rows.png)
     fig, axes = plt.subplots(len(picks), 3, figsize=(11, 3.7 * len(picks)))
     for r, (img, tgt, p, ratio) in enumerate(picks):
         rgb = rgb_from_img(img); mk = marker_xy(img)

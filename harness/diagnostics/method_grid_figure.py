@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
-"""The same De Pijp val routes solved by six methods, side by side (9 Oct 2026; README figure).
+"""The same De Pijp val routes solved by five methods, side by side (9 Oct 2026, revised 10 Oct; README figure).
 
-Columns = routes, rows = methods, in this order: the straight line between the markers; Qwen3-VL-4B zero-shot
-(two-pass); Qwen3-VL-2B + LoRA on 19.3k routes; the one-shot network; the wave search; the wave search + cleanup pass.
+Columns = routes, rows = methods, in this order: Qwen3-VL-4B zero-shot (run two-pass: a marker-probe prompt locates
+the two discs, then the route prompt is anchored on those coordinates); Qwen3-VL-2B + LoRA on 19.3k routes; the
+one-shot network; the wave search; the wave search + cleanup pass. (10 Oct: the straight-line row was dropped from the
+picture; the straight line is still loaded, as the auto rule uses it.)
 Every verdict is the polyline rule of `spatial_data/track_a_export.py score` (the one-rule comparison,
 docs/reports/COMPARISON_TABLE_2026-10-08.md), recomputed here from the prediction files:
 
-  straight      data/track_a/de_pijp_val_plain/baselines/straight.jsonl
+  straight      data/track_a/de_pijp_val_plain/baselines/straight.jsonl   (route choice only, not drawn)
   Qwen 4B       runs/qwen_vanilla/pred_4b_two-pass_n200.jsonl            (first 200 val routes only)
   Qwen LoRA     runs/qwen_sft/lora20000_v1/pred_val_v1_n500.jsonl
   grid models   data/track_a/de_pijp_val_plain/preds/<run>_{oneshot,wave}.jsonl (the converted polylines, verdicts)
@@ -17,11 +19,21 @@ goal discs with labels) and the method's output in orange: a polyline 3 px wide 
 drawing as filled 2 m cells (for the wave search the last frame of the free-running search). Colours as
 wave_rollout_gif.py / showcase_compare.py (ground #F5F3EE, buildings and markers #343A46, drawing #E86A17).
 
-Route choice: `--routes A B C`, or `--auto`, which picks from the first 200 val routes (so the 4B row exists):
-(1) Qwen LoRA solved, wave search not; (2) wave search solved, Qwen LoRA not; (3) both failed. Within each group it
-prefers routes with 4+ fronts where the straight line fails (a visible detour), for (2) and (3) a Qwen failure that
-crosses a building, for (1) and (3) a search failure by a gap (not connected); ties broken by the largest detour
-(teacher_m / straight_m), routes from distinct windows.
+Subtitles: the verdict ("solved · length 0.96 × teacher" or the reason for the failure) and, for the grid methods,
+the lit cells of the final drawing. The length reference is the teacher's clearance-priced walking path (it keeps
+away from walls), so a legal line closer to the buildings can come out shorter than 1.0 x; the cap is 1.10 x.
+
+Route choice: `--routes A B C`, or `--auto`, which picks from the first 200 val routes (so the 4B row exists), one
+column per group, in this order:
+(1) both solved (Qwen LoRA and the wave search): the longest such route, by fronts (n_goal), then walking length
+    (teacher_m);
+(2) Qwen LoRA solved, wave search not; (3) wave search solved, Qwen LoRA not. Within (2) and (3) it prefers routes
+    with 4+ fronts where the straight line fails (a visible detour), for (3) a Qwen failure that crosses a building,
+    for (2) a search failure by a gap (not connected); ties broken by the largest detour (teacher_m / straight_m),
+    routes from distinct windows.
+On the 10 Oct prediction files this gives routes 188 for (2) and 192 for (3), the same as the 9 Oct figure.
+Column headers name the group from the two verdicts (both solved / only Qwen solved / only the search solved /
+both failed).
 
 Usage (from harness/, CPU only, a few seconds):
   PYTHONPATH=. python diagnostics/method_grid_figure.py --auto [--out PNG ...]
@@ -51,9 +63,9 @@ WAVE = "c5_r5_wave_nat3_tok01_ownp50_from48k_L4_16k_g128_store100k"
 CLEANUP = "c5_r5_wave_nat3_tok01_cleanup100_dw3_ownp50_r2_L4_16k_g128_store100k"
 
 # (key, panel title, kind, prediction file, pads file)
+STRAIGHT = ("straight", "Straight line between the markers", "poly", EXPORT / "baselines/straight.jsonl", None)
 METHODS = [
-    ("straight", "Straight line between the markers", "poly", EXPORT / "baselines/straight.jsonl", None),
-    ("qwen4b", "Qwen3-VL-4B, zero-shot (two-pass)", "poly", ROOT / "runs/qwen_vanilla/pred_4b_two-pass_n200.jsonl", None),
+    ("qwen4b", "Qwen3-VL-4B, zero-shot", "poly", ROOT / "runs/qwen_vanilla/pred_4b_two-pass_n200.jsonl", None),
     ("lora", "Qwen3-VL-2B + LoRA, 19.3k routes", "poly", ROOT / "runs/qwen_sft/lora20000_v1/pred_val_v1_n500.jsonl", None),
     ("oneshot", "One-shot network (1 pass)", "grid", EXPORT / f"preds/{ONESHOT}_oneshot.jsonl",
      ROOT / f"runs/diagnostics/{ONESHOT}/pads_oneshot.npz"),
@@ -83,13 +95,20 @@ def load_pads(path: Path) -> dict[int, np.ndarray]:
 
 def verdict_text(res: dict) -> str:
     if res["solved"]:
-        return f"solved (length x{res['length_ratio']:.2f})"
+        return f"solved · length {res['length_ratio']:.2f} × teacher"
     r = res["reason"]
     if r == "unparseable":
         return "not solved: start and goal not connected"
     if r == "too long":
-        return f"not solved: too long (x{res['length_ratio']:.2f})"
+        return f"not solved: too long ({res['length_ratio']:.2f} × teacher)"
     return f"not solved: {r}"
+
+
+def group_name(q: dict | None, w: dict | None) -> str:
+    """Column header from the Qwen LoRA and wave search verdicts."""
+    qs, wsv = bool(q and q["solved"]), bool(w and w["solved"])
+    return {(True, True): "both solved", (True, False): "only Qwen solved",
+            (False, True): "only the search solved", (False, False): "both failed"}[(qs, wsv)]
 
 
 def load_all(n: int = 500):
@@ -97,7 +116,7 @@ def load_all(n: int = 500):
     routes = TA.load_routes(EXPORT / "routes.jsonl")[:n]
     masks = {r["route"]: TA.load_building_mask(r) for r in routes}
     preds, verd, pads = {}, {}, {}
-    for key, _, kind, pf, padf in METHODS:
+    for key, _, kind, pf, padf in [STRAIGHT] + METHODS:
         p = TA.load_predictions(pf)
         preds[key] = p
         verd[key] = {r["route"]: TA.score_polyline(p.get(r["route"]), r, masks[r["route"]])
@@ -109,15 +128,19 @@ def load_all(n: int = 500):
 
 def auto_pick(routes: list[dict], verd: dict, first: int = 200) -> list[tuple[int, str]]:
     pool = [r for r in routes[:first] if all(r["route"] in verd[k] for k, *_ in METHODS)]
+    both = [r for r in pool if verd["lora"][r["route"]]["solved"] and verd["wave"][r["route"]]["solved"]]
+    both.sort(key=lambda r: (r["n_goal"], r["teacher_m"]), reverse=True)
+    print(f"[auto] both solved: {len(both)} candidates; top 5:",
+          ", ".join(f"{r['route']} (n_goal {r['n_goal']}, {r['teacher_m']:.0f} m)" for r in both[:5]))
+    if not both:
+        raise SystemExit("no route for group 'both solved'")
+    picked, windows = [(both[0]["route"], "both solved")], {tuple(both[0]["origin"])}
     groups = [
         ("Qwen LoRA solved, wave search not", lambda q, w: q["solved"] and not w["solved"],
          lambda q, w: w["reason"] == "unparseable"),
         ("wave search solved, Qwen LoRA not", lambda q, w: w["solved"] and not q["solved"],
          lambda q, w: q["reason"] == "crosses a building"),
-        ("both failed", lambda q, w: not q["solved"] and not w["solved"],
-         lambda q, w: q["reason"] == "crosses a building" and w["reason"] == "unparseable"),
     ]
-    picked, windows = [], set()
     for name, cond, pref in groups:
         cands = []
         for r in pool:
@@ -176,13 +199,15 @@ def figure(picks: list[int], routes, masks, preds, verd, pads, P: int = 440) -> 
     recs = {r["route"]: r for r in routes}
     mx, gap, head, ttl, rgap = 20, 20, 64, 50, 18
     W = 2 * mx + len(picks) * P + (len(picks) - 1) * gap
-    H = head + len(METHODS) * (ttl + P + rgap) + 4
+    f_note = font(15)
+    note = wrap(NOTE, f_note, W - 2 * mx)
+    H = head + len(METHODS) * (ttl + P + rgap) + 8 + 22 * len(note) + 10
     im = Image.new("RGB", (W, H), (255, 255, 255)); d = ImageDraw.Draw(im)
     f_head, f_sub, f_ttl, f_small = font(22, bold=True), font(15), font(17, bold=True), font(14)
     for c, rix in enumerate(picks):
         rec = recs[rix]; x = mx + c * (P + gap)
-        d.text((x, 10), f"De Pijp val route {rix}", fill=(20, 20, 20), font=f_head)
-        d.text((x, 38), f"{rec['teacher_m']:.0f} m walking (straight {rec['straight_m']:.0f} m) · {rec['n_goal']} fronts",
+        d.text((x, 10), group_name(verd["lora"].get(rix), verd["wave"].get(rix)), fill=(20, 20, 20), font=f_head)
+        d.text((x, 38), f"De Pijp val route {rix} · {rec['teacher_m']:.0f} m walking · {rec['n_goal']} fronts",
                fill=(90, 90, 90), font=f_sub)
         for r, (key, title, kind, *_rest) in enumerate(METHODS):
             y = head + r * (ttl + P + rgap)
@@ -200,21 +225,40 @@ def figure(picks: list[int], routes, masks, preds, verd, pads, P: int = 440) -> 
             d.text((x, y + 23), sub, fill=col, font=f_small)
             im.paste(draw_panel(rec, masks[rix], kind, pts, pad, P), (x, y + ttl))
             d.rectangle([x - 1, y + ttl - 1, x + P, y + ttl + P], outline=(210, 210, 210))
+    y = head + len(METHODS) * (ttl + P + rgap) + 4
+    for line in note:
+        d.text((mx, y), line, fill=(90, 90, 90), font=f_note); y += 22
     return im
+
+
+NOTE = ("The length reference is the teacher's clearance-priced walking path, which keeps away from walls; a legal line "
+        "closer to the buildings can be shorter than 1.0×. The cap is 1.10×.")
+
+
+def wrap(text: str, f, width: int) -> list[str]:
+    d = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    lines, cur = [], ""
+    for w in text.split():
+        t = f"{cur} {w}".strip()
+        if cur and d.textlength(t, font=f) > width:
+            lines.append(cur); cur = w
+        else:
+            cur = t
+    return lines + [cur] if cur else lines
 
 
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     g = ap.add_mutually_exclusive_group(required=True)
     g.add_argument("--routes", type=int, nargs="+", help="De Pijp val route ids, one column each")
-    g.add_argument("--auto", action="store_true", help="pick three routes from the first 200 by the rule in the docstring")
+    g.add_argument("--auto", action="store_true", help="pick three routes (both solved / only Qwen / only the search) from the first 200 by the rule in the docstring")
     ap.add_argument("--out", type=Path, nargs="+",
                     default=[ROOT / "docs/memo/wave_search_2026-10-05/method_comparison_3_routes.png"])
     ap.add_argument("--panel", type=int, default=440, help="panel size in px (3 columns at 440 -> 1400 px wide)")
     a = ap.parse_args()
 
     routes, masks, preds, verd, pads = load_all()
-    for key, *_ in METHODS:                                   # the shares must match the comparison table
+    for key, *_ in [STRAIGHT] + METHODS:                      # the shares must match the comparison table
         v = verd[key]; n = len(v)
         print(f"{key:9s} n={n:3d} solved {sum(x['solved'] for x in v.values()) / n:.3f}")
     picks = [r for r, _ in auto_pick(routes, verd)] if a.auto else a.routes

@@ -6,7 +6,18 @@ and its own token picks the next state, until DONE.
 Usage (from harness/): PYTHONPATH=. ../.venv/bin/python diagnostics/wave_rollout_gif.py RUN_ID --route 363 [--scale 3]
        [--crops DIR --store c4_256_val --split val|test]   # another district, as in wave_rollout_eval.py
 Writes runs/diagnostics/RUN_ID/wave_search{tag}_route{route}.gif (+ _final.png); tag is empty for the run's own store,
-else _{district}_{store}_{split} (e.g. _maze_v1_c4_256_val_val)."""
+else _{district}_{store}_{split} (e.g. _maze_v1_c4_256_val_val).
+
+--cleanup-run RUN_ID (10 Oct): after the search ends, ONE extra draw pass of another network (a cleanup-trained one,
+spatial_data/c5_cleanup.py) on the final drawing: state DRAW (task key wave_draw), the same input image with the final
+drawing as the pad in channel 16, as harness/diagnostics/wave_rollout_eval.py `step` does. The pass is appended as a
+last frame "cleanup pass (separate network)"; the script prints lit cells and route_score (connected start -> goal,
+length / teacher, building share, success) before and after it, and the file name gets _cleanup_{that run}.
+Both networks must read the same input encoding (the cleanup runs differ from their search runs only in training
+data and loss weights). --cleanup-input draw_in applies the pass instead to the drawing that entered the search's own
+last DRAW pass (the input the cleanup network was trained on: the origin-pass output), i.e. it replaces that DRAW
+pass; the frame title then says so. --out writes the GIF to that path instead. --save-frames NPZ keeps the pad of every
+frame (packed bits, with the frame titles and the state tokens), e.g. for diagnostics/concept_three_methods_figure.py."""
 from __future__ import annotations
 
 import argparse
@@ -22,7 +33,7 @@ import data
 import grid_vit_adapter
 from checkpoints import checkpoint_model_config
 from diagnostics import wave_search_rollout as ws
-from diagnostics.wave_rollout_eval import STATE_KEY, step
+from diagnostics.wave_rollout_eval import STATE_KEY, route_score, step
 from plain_gpt_module.checkpoint import read_checkpoint
 from plain_gpt_module.local_config import LocalGridViTConfig
 from plain_gpt_module.local_grid_vit import LocalGridViT
@@ -51,6 +62,11 @@ def main() -> int:
     ap.add_argument("--store", default=None, help="route store under that crops dir, e.g. c4_256_val (default: the run's)")
     ap.add_argument("--split", default="val", choices=("val", "test"))
     ap.add_argument("--tag", default=None, help="suffix of the output file (default: from crops/store/split when given)")
+    ap.add_argument("--cleanup-run", default=None, help="run id of a network whose draw pass is applied once to the final drawing")
+    ap.add_argument("--cleanup-input", default="final", choices=("final", "draw_in"),
+                    help="final: the search's final drawing; draw_in: the drawing that entered its last DRAW pass")
+    ap.add_argument("--save-frames", type=Path, default=None, help="npz with the pad of every frame")
+    ap.add_argument("--out", type=Path, default=None, help="GIF path (default: runs/diagnostics/RUN_ID/...)")
     args = ap.parse_args()
     meta_path = Path(config.diagnostics_dir) / args.run_id / "meta.json"
     meta = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.is_file() else {}
@@ -86,15 +102,41 @@ def main() -> int:
     pad = _wave_start_disc(loader.route["markers"][rix:rix + 1], grid, crop)[0]
     state = TOK_SEARCH
     frames = [("the map: buildings, start and goal", None), ("start: the start disc on the scratchpad", pad.cpu().numpy())]
-    toks = []
+    toks = []; draw_in = None
     for i in range(2 * n_goal + 4):
         img_t, _, task_id, cond = base[state]
+        if state == TOK_DRAW:
+            draw_in = pad
         pad, tok = step(model, img_t, pad, task_id, cond, crop, grid, fg, device_type)
         toks.append(tok)
         frames.append((f"pass {i + 1}: state {NAMES[state]}  ->  says {NAMES.get(tok, '?')}", pad.cpu().numpy()))
         if tok == TOK_DONE or tok not in STATE_KEY:
             break
         state = tok
+
+    cleanup = None
+    if args.cleanup_run:                                      # one draw pass of another network on the final drawing
+        cdoc_ckpt = ws._resolve_checkpoint(args.cleanup_run, None)
+        cdoc = read_checkpoint(cdoc_ckpt, map_location="cpu")
+        ccfg = checkpoint_model_config(cdoc)
+        if (int(ccfg.get("img_size", crop)), int(ccfg.get("grid_out_size", grid))) != (crop, grid):
+            raise SystemExit(f"cleanup network built for {ccfg.get('img_size')} px / {ccfg.get('grid_out_size')} cells, "
+                             f"the search runs at {crop} px / {grid} cells")
+        cmodel = LocalGridViT(LocalGridViTConfig(**ccfg)).to(data.device)
+        grid_vit_adapter.load_checkpoint(cdoc_ckpt, model=cmodel); cmodel.train(False)
+        img_t, _, task_id, cond = base[TOK_DRAW]
+        if args.cleanup_input == "draw_in" and draw_in is None:
+            raise SystemExit("the search never ran a DRAW pass; --cleanup-input draw_in has no input")
+        before = pad if args.cleanup_input == "final" else draw_in
+        after, ctok = step(cmodel, img_t, before, task_id, cond, crop, grid, cmodel.config.foreground_class, device_type)
+        blocked = bld.reshape(grid, s, grid, s).all(axis=(1, 3))
+        sc, gc = (int(mk[0][0]) // s, int(mk[0][1]) // s), (int(mk[1][0]) // s, int(mk[1][1]) // s)
+        cleanup = {k: route_score(m.cpu().numpy(), sc, gc, blocked, goal_m, float(s))
+                   for k, m in (("before", before), ("after", after))}
+        cleanup["token"] = NAMES.get(ctok, ctok)
+        cleanup["input"] = args.cleanup_input
+        frames.append(("cleanup pass (separate network)" if args.cleanup_input == "final" else
+                       "cleanup pass (separate network) in place of the last DRAW pass", after.cpu().numpy()))
 
     S = args.scale; W = crop * S; top = 46
     yy, xx = np.mgrid[0:crop, 0:crop]
@@ -124,11 +166,24 @@ def main() -> int:
         tag = "_" + "_".join(x for x in ((Path(args.crops).parts[-3] if args.crops else ""), args.store or "", args.split) if x)
     else:
         tag = ""
-    out = odir / f"wave_search{tag}_route{rix:03d}.gif"
+    if args.cleanup_run:
+        tag += ("_cleanup_" if args.cleanup_input == "final" else "_cleanupdrawin_") + args.cleanup_run
+    out = args.out or odir / f"wave_search{tag}_route{rix:03d}.gif"
+    out.parent.mkdir(parents=True, exist_ok=True)
     durations = [1500, 1000] + [args.ms] * (len(images) - 3) + [4000]
+    if cleanup is not None:
+        durations[-2] = 2500                                  # hold the search's final drawing before the cleanup frame
     images[0].save(out, save_all=True, append_images=images[1:], duration=durations, loop=0, optimize=False)
     images[-1].save(odir / f"wave_search{tag}_route{rix:03d}_final.png")
     print("tokens:", [NAMES.get(t, t) for t in toks], "| passes", len(toks), "| n_goal", n_goal)
+    if cleanup is not None:
+        print("cleanup pass:", json.dumps(cleanup))
+    if args.save_frames is not None:
+        pads_np = np.stack([np.zeros((grid, grid), bool) if p is None else p.astype(bool) for _, p in frames])
+        args.save_frames.parent.mkdir(parents=True, exist_ok=True)
+        np.savez_compressed(args.save_frames, pad=np.packbits(pads_np, axis=-1), grid=grid, crop=crop, route=rix,
+                            titles=np.array([t for t, _ in frames]), tokens=np.array(toks, np.int64), run=args.run_id)
+        print("wrote", args.save_frames)
     print("wrote", out)
     return 0
 
