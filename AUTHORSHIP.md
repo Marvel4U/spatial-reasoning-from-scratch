@@ -1,6 +1,6 @@
 # Authorship
 
-This is Marvin Uhlmann's project. The research direction, the task ladder, every design decision and every training run are his. AI assistants worked in the loop, Claude (Anthropic) and Cursor Composer, and the split is recorded here because it matters for reading the results.
+This is Marvin Uhlmann's project. The research direction, the task ladder, the design decisions of every experiment (as documented in the plans under `docs/plans/`) and every training run are his. AI assistants worked in the loop, Claude (Anthropic) and Cursor Composer, and the split is recorded here because it matters for reading the results.
 
 ## One-shot rungs (c0–c4, m1; to 27 Sep 2026)
 
@@ -10,7 +10,7 @@ This is Marvin Uhlmann's project. The research direction, the task ladder, every
 | model (`plain_gpt_module/`: the grid vision transformer, relative position bias, conditioning) | Marvin |
 | training harness, run ledger, diagnostics suite, experiment specs (`harness/`), and every training run | Marvin, with Cursor Composer support |
 | data pipeline, task generators, GPU loaders, path-target builder, probes and analysis scripts (`worldsnap/`, `spatial_data/`, `analysis/`, `docs/plans/perf_prototypes/`) | Claude, reviewed by Marvin |
-| reports, plans and this README | drafted by Claude on Marvin's questions, corrected and extended by Marvin |
+| reports and plans of these rungs (`docs/reports/M1_FOOD_DRINK_WITHIN_100M_2026-09-24.md`, `docs/reports/C4_SEGMENT_DETOUR_2026-09-25.md`) | drafted by Claude on Marvin's questions, corrected and extended by Marvin |
 
 ## The search (C5) and the Qwen track (from 28 Sep 2026)
 
@@ -25,8 +25,19 @@ This is Marvin Uhlmann's project. The research direction, the task ladder, every
 | the synthetic maze world (`spatial_data/maze_world.py`) | Claude |
 | evaluation and diagnostics for the search: rollout evaluation, animations, timing, the ties diagnostic, the one-shot model under the search's rule, the showcase pictures (`harness/diagnostics/wave_rollout_eval.py`, `wave_rollout_gif.py`, `wave_rollout_timing.py`, `wave_back_ties.py`, `oneshot_route_eval.py`, `showcase_compare.py`, `drawing_to_polyline.py`, `method_grid_figure.py`) | Claude |
 | Track A export of routes as map images and polylines, and the polyline scorer (`spatial_data/track_a_export.py`) | Claude |
-| the Qwen track code: loading, prompts, coordinate conversion, zero-shot evaluation, the LoRA training loop and adapter evaluation (`qwen_reference/`, `qwen_fine_tuning/`), all its runs, and its report (`docs/reports/TRACK_A_QWEN_VANILLA_AND_SFT_2026-10-08.md`) | Marvin, with Cursor support |
-| the search report, memos and plans (`docs/reports/C5_WAVE_SEARCH_2026-10-03.md`, `docs/memo/`, `docs/plans/C5_PLAN.md` and the dated plans), this README | drafted by Claude from Marvin's runs and decisions, reviewed and corrected by Marvin |
+| the Qwen track code: loading, prompts, coordinate conversion, zero-shot evaluation, the LoRA training loop and adapter evaluation (`qwen_reference/`, `qwen_fine_tuning/`), and all its runs | Marvin, with Cursor support |
+| plans (`docs/plans/C5_PLAN.md` and the dated plans) | drafted by Claude from Marvin's decisions, reviewed and corrected by Marvin |
+
+## Reports and writing
+
+| text | who |
+|---|---|
+| the Track A report (`docs/reports/TRACK_A_QWEN_VANILLA_AND_SFT_2026-10-08.md`) | written by Marvin |
+| the search report (`docs/reports/C5_WAVE_SEARCH_2026-10-03.md`), the memos (`docs/memo/`), the comparison report (`docs/reports/COMPARISON_TABLE_2026-10-08.md`) and the README drafts | written by Claude from the runs, revised with Marvin |
+| the structure of this write-up: the paper form, its parts, the choice of figures | Marvin |
+| every number in the README | reviewed by Marvin against its source |
+
+The design decisions of the experiments are Marvin's, as documented in the plans; the reports and the README describe them, they did not make them.
 
 Parts of Claude's share were built by Claude sub-agents (Opus and Sonnet models) working to Claude's specifications and reviewed by Claude before Marvin's review. Two of Claude's proposals during the search turned out wrong and are documented as such in the report (§5.3, §5.5).
 
