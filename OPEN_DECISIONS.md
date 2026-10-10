@@ -21,7 +21,7 @@ Status 11 Sep 2026. Each needs Marvin's call (Claude proposes, Marvin decides â€
 - **Authorship (f) settled (19 Sep):** local model and all model/training code typed by Marvin, the local model only in sessions he leads line by line; data/task generators and eval infra collaborative with review.
 - **(j) World substrate = real-city frozen snapshots**, not procedural worlds. Tools and verifiers read the same local datastore; "synthetic" = rendered images + generated tasks. (11 Sep, after survey: `survey/SURVEY_2026-09-11.md`.)
 - **(k) Cities = Amsterdam first, then Barcelona, plus a Paris district and Vienna.** London and New York dropped (OS licensing; no noise map / no open licence). (11 Sep.)
-- **(l) Licensing posture: deferred** until there are good results; note ODbL share-alike risk on a released QA corpus. (11 Sep.)
+- **(l) Licensing posture: decided (Oct 2026): code and weights MIT; the evaluation bundle's Amsterdam label stacks ODbL 1.0 with OSM attribution (DATA_LICENSES.md).
 - **Opening hours deferred** as a task layer; stick to layers that are easy in the task stack (heights/shadow, noise, transit, sidewalks, POIs). (11 Sep.)
 - **Paper mode:** no cover-to-cover reading; Marvin skims, we discuss implications together. Reading list: `survey/KEY_PAPERS.md`. (11 Sep.)
 - **PERIA (Jun 2026) is a reproduction/branch-off candidate**; investigation in progress (`survey/raw/05_...`). (11 Sep.)
