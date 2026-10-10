@@ -35,7 +35,7 @@ This is Marvin Uhlmann's project. The research direction, the task ladder, the d
 | the Track A report (`docs/reports/TRACK_A_QWEN_VANILLA_AND_SFT_2026-10-08.md`) | written by Marvin |
 | the search report (`docs/reports/C5_WAVE_SEARCH_2026-10-03.md`), the memos (`docs/memo/`), the comparison report (`docs/reports/COMPARISON_TABLE_2026-10-08.md`) and the README drafts | written by Claude from the runs, revised with Marvin |
 | the structure of this write-up: the paper form, its parts, the choice of figures | Marvin |
-| every number in the README | reviewed by Marvin against its source |
+| every number in the README | copied from a run's evaluation file or a report, with the source named; Marvin reviews the numbers against their sources before each release |
 
 The design decisions of the experiments are Marvin's, as documented in the plans; the reports and the README describe them, they did not make them.
 
