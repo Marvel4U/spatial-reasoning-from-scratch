@@ -181,6 +181,8 @@ def main() -> int:
 
     # the cell rule on exactly these drawings (the eval JSON written together with the pads), route by route
     ej = Path(P["meta"]["eval_json"])
+    if not ej.is_absolute():                                  # released pads files carry repo-relative paths
+        ej = ROOT / ej
     cell = cell_rule_per_route(ej) if ej.is_file() else {}
     cross = {}
     for x in rep["routes"]:

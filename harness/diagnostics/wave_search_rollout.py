@@ -86,13 +86,19 @@ def _overrides_for_run(run_id: str) -> dict:
     return {}
 
 
+# Directories recorded in meta.json are those of the machine the run trained on; the evaluating checkout keeps its
+# own (REPO_ROOT/data, runs/checkpoints, runs/diagnostics), so a released meta.json works from any clone.
+MACHINE_PATH_KEYS = ("data_root", "results_path", "checkpoint_dir", "harness_checkpoint_dir", "diagnostics_dir",
+                     "diagnostics_checkpoint_dir", "RESULTS_PATH")
+
+
 def _apply_meta_config(meta: dict) -> dict:
     saved: dict = {}
     for k, v in (meta.get("config") or {}).items():
+        if k in MACHINE_PATH_KEYS:
+            continue
         if hasattr(config, k):
             saved[k] = getattr(config, k)
-            if k in ("data_root", "harness_checkpoint_dir", "diagnostics_dir") and v is not None:
-                v = Path(v)
             setattr(config, k, v)
     return saved
 

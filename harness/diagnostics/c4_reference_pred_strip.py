@@ -38,10 +38,11 @@ def _apply_meta_config(meta: dict) -> dict:
     saved: dict = {}
     top = meta.get("config") or {}
     for k, v in top.items():
+        if k in ("data_root", "results_path", "checkpoint_dir", "harness_checkpoint_dir", "diagnostics_dir",
+                 "diagnostics_checkpoint_dir", "RESULTS_PATH"):
+            continue                                          # the machine's directories, not the run's (see wave_search_rollout)
         if hasattr(config, k):
             saved[k] = getattr(config, k)
-            if k in ("data_root", "harness_checkpoint_dir", "diagnostics_dir") and v is not None:
-                v = Path(v)
             setattr(config, k, v)
     return saved
 
