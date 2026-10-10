@@ -313,16 +313,19 @@ python -m pytest tests -q          # data-dependent tests skip without the sampl
 
 `REPRODUCE.md` lists the pipeline commands, layers → crops → path store → one run per task level, then the wave data, the search runs, the natural-noise store, the rollout evaluation and the Qwen track, with wall times on an RTX 3060, and how to load a released checkpoint. Every number in this paper names the run it comes from; the run ledger (`runs/experiments.json`) holds the configuration of each.
 
-### 9.3 The GitHub release holds one model per one-shot task level, the search networks, the matched one-shot network and the LoRA adapter
+### 9.3 The GitHub release holds one model per one-shot task level, the search networks, the matched one-shot network, the LoRA adapter and the evaluation data
 
-*__Table 7.__ Release assets beyond the one-shot task levels (one `.pt` file per level, holding `model_state_dict`, `model_config`, the training record and the source run id). The evaluation scripts take a run id and `--checkpoint` for the file (`REPRODUCE.md` §5–6).*
+*__Table 7.__ Release assets beyond the one-shot task levels (one `.pt` file per level, holding `model_state_dict`, `model_config`, the training record and the source run id; optimizer state removed). The evaluation scripts find a network as `runs/checkpoints/<run id>.pt` or take `--checkpoint FILE`; with the two bundles, a fresh clone recomputes the numbers of Sections 5–7 (`REPRODUCE.md` §8, which lists the commands, the checkpoint names to place the files under, and the check against this paper).*
 
-| file | run id | what |
-|---|---|---|
-| `c5_wave_search_256m.pt` | `c5_r5_wave_nat3_tok01_ownp50_from48k_L4_16k_g128_store100k` | the search at 256 m after one round of natural noise (Table 3, Table 5) |
-| `c5_wave_search_512m.pt` | `c5_r5_wave_nat3_tok01_ownp50_r1_L4_16k_g256_b64_zc512` | the search at 512 m after one round of natural noise at that size |
-| `c5_oneshot_256m_matched.pt` | `c5_os_bld_det_L4_64k_g128_store100k` | the budget-matched one-shot network (64k steps, no scratchpad) |
-| `qwen3vl2b_lora_route_v1_19k/` | Track A `lora20000_v1` | LoRA adapter for Qwen3-VL-2B-Instruct, 19.3k training routes; the base weights are not included |
+| file | size | run id | what |
+|---|---:|---|---|
+| `c5_wave_search_256m.pt` | 35.4 MB | `c5_r5_wave_nat3_tok01_ownp50_from48k_L4_16k_g128_store100k` | the search at 256 m after one round of natural noise (Table 3, Table 5) |
+| `c5_wave_search_512m.pt` | 35.4 MB | `c5_r5_wave_nat3_tok01_ownp50_r1_L4_16k_g256_b64_zc512` | the search at 512 m after one round of natural noise at that size (Section 5.4) |
+| `c5_wave_search_512m_hero.pt` | 35.5 MB | `c5_r5_wave_nat3_tok01_from_ownp50_L4_16k_g256_b64_zc512` | the search at 512 m before that round, the network of Figure 1 |
+| `c5_oneshot_256m_matched.pt` | 35.4 MB | `c5_os_bld_det_L4_64k_g128_store100k` | the budget-matched one-shot network (64k steps, no scratchpad) |
+| `qwen3vl2b_lora_route_v1_19k.zip` | 25.9 MB | Track A `lora20000_v1` | LoRA adapter for Qwen3-VL-2B-Instruct, 19.3k training routes; the base weights are not included |
+| `eval_bundle_v0.2.tar.gz` | 35.3 MB | – | the evaluation inputs: district label stacks, the validation route stores of De Pijp, Zuid + Centrum (256 m, 512 m) and the house maze (256 m, 512 m), the three Track A validation exports, and the per-route results and final drawings of the seven runs behind Sections 5 and 7 |
+| `qwen_val_predictions_v0.2.tar.gz` | 0.2 MB | Track A `qwen_vanilla`, `lora{1000,5000,20000}_v1` | the Qwen predictions and evaluation reports behind Tables 4–6 |
 
 ### 9.4 Authorship is recorded per component
 
