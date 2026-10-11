@@ -2,6 +2,8 @@
 
 **Marvin Uhlmann**
 
+> **Status.** Independent research report accompanying the released code, checkpoints and evaluation artifacts; not peer reviewed. For the condensed overview see [README.md](README.md); for the evaluation replay and training commands see [REPRODUCE.md](REPRODUCE.md).
+
 *Written with AI assistance (Claude, Anthropic; Cursor Composer). The split of code, experiments and writing is recorded per component in [`AUTHORSHIP.md`](AUTHORSHIP.md).*
 
 ## Abstract
