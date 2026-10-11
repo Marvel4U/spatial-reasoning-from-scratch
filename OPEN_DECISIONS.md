@@ -1,5 +1,5 @@
 # OPEN_DECISIONS — the decision trail of the planning phase
-*Status 11 Oct 2026: kept as the project's decision trail from the planning phase (11–20 Sep 2026). Repository name, public timing and licensing are now decided (see Decided). The other items still under Open belong to the original plan for a tool-using Qwen agent trained with GRPO; the project went another way after 19 Sep (see `docs/archive/PLAN.md` and `README.md`), and they are left as they stood, undecided.*
+*Status 11 Oct 2026: kept as the project's decision trail from the planning phase (11–20 Sep 2026). Repository name, public timing and licensing are now decided (see Decided). The other items still under Open belong to the original plan for a tool-using Qwen agent trained with GRPO; the project went another way after 19 Sep (see `docs/archive/PLAN.md` and `PAPER.md`), and they are left as they stood, undecided.*
 
 Original status 11 Sep 2026. Each needs Marvin's call (Claude proposes, Marvin decides — he defends every choice in interviews). Move decided items to the bottom with date + rationale.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Concept figure: the three methods of the comparison, each as a chain from input to scored output (10 Oct 2026;
-README figure, no title inside the image, the README caption carries it).
+PAPER.md Figure 7, no title inside the image, the caption in PAPER.md carries it).
 
 Three lanes, one per method, each read left to right, with real pictures of De Pijp val route 192 (350 m walking,
 9 fronts; the "only the search solved" column of method_comparison_3_routes.png):

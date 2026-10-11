@@ -52,7 +52,7 @@ Classes:
 | `docs/plans/perf_prototypes/c5_length_check.py` | b | same |
 | `docs/plans/perf_prototypes/c5_rays_loader_check.py` | b | same |
 | `docs/reports/C4_SEGMENT_DETOUR_2026-09-25.md` | a | `cd <home path> &&` dropped from a command line |
-| `docs/reports/C5_WAVE_SEARCH_2026-10-03.md` | c | "draft for review" and pending-marker sentence dropped (no pending markers remain); figures point to `docs/figures/` instead of the source repository's memo folders; README draft pointer now points to `README.md` |
+| `docs/reports/C5_WAVE_SEARCH_2026-10-03.md` | c | "draft for review" and pending-marker sentence dropped (no pending markers remain); figures point to `docs/figures/` instead of the source repository's memo folders; README draft pointer now points to `README.md` (since 11 Oct the paper text is `PAPER.md`) |
 | `docs/reports/TRACK_A_QWEN_VANILLA_AND_SFT_2026-10-08.md` | a | job-search and "product decision" wording, environment path |
 | `harness/diagnostics/c4_reference_pred_strip.py` | b | `_apply_meta_config` no longer forces the training machine's directories from `meta.json` |
 | `harness/diagnostics/drawing_to_polyline.py` | b | repo-relative `eval_json` in a released pads file resolved against the repository root |

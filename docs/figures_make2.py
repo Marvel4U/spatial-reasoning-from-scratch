@@ -1,4 +1,4 @@
-"""README figures, second set: F0 hero (detour model), F00 concept diagram, F9 results table as a picture.
+"""Figures of the paper (PAPER.md), second set: F0 hero (detour model), F00 concept diagram, F9 results table as a picture.
 Run from the source repo with its venv: .venv/bin/python <public>/docs/figures_make2.py [f0|f00|f9]"""
 import sys, os, json
 from pathlib import Path
@@ -95,7 +95,7 @@ def fig_f0():
         key = (round(t[4], 4), int(t[2].sum()))
         if key not in seen: seen.add(key); uniq.append(t)
     picks = [t[1:] for t in sorted(uniq[:4], key=lambda t: -t[4])]
-    picks = [picks[0], picks[2]]   # 10 Oct: the README keeps the first and third of the four (old: figures/archive/F0_hero_detour_4rows.png)
+    picks = [picks[0], picks[2]]   # 10 Oct: PAPER.md keeps the first and third of the four (old: figures/archive/F0_hero_detour_4rows.png)
     fig, axes = plt.subplots(len(picks), 3, figsize=(11, 3.7 * len(picks)))
     for r, (img, tgt, p, ratio) in enumerate(picks):
         rgb = rgb_from_img(img); mk = marker_xy(img)

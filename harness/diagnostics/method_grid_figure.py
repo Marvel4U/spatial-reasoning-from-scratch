@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""The same De Pijp val routes solved by five methods, side by side (9 Oct 2026, revised 10 Oct; README figure).
+"""The same De Pijp val routes solved by five methods, side by side (9 Oct 2026, revised 10 Oct; PAPER.md Figure 8 and the README).
 
 Columns = routes, rows = methods, in this order: Qwen3-VL-4B zero-shot (run two-pass: a marker-probe prompt locates
 the two discs, then the route prompt is anchored on those coordinates); Qwen3-VL-2B + LoRA on 19.3k routes; the

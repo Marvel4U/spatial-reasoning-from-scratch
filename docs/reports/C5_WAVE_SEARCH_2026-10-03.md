@@ -431,7 +431,7 @@ From [P §8] and [TL §8], in order:
 4. **The control for the token fix**: the L4 48k recipe at token weight 1.0.
 5. **One forward per pass** for grid and token; then training on the network's own outputs if the failures turn out to be drift.
 6. **Later teachers on the same interface**: tighten after DRAW, goal-aware fronts, the network deciding when to build the path.
-7. The public repository section (now in `README.md`).
+7. The public repository section (now in `PAPER.md`, Section 5).
 
 ## 9. Files
 

@@ -27,7 +27,7 @@ All outputs land under `data/amsterdam/de_pijp/`, which is git-ignored. The firs
 
 ## 3. Train one model per task level
 
-Runs are specified as functions in `harness/experiments.py` and executed by the harness from the `harness/` folder; `RUN` at the bottom of that file selects what runs. Each spec names the task, the model size, the store and the seed; the run ledger `runs/experiments.json` records what was actually run, including every configuration used in the README. Approximate wall times on the RTX 3060:
+Runs are specified as functions in `harness/experiments.py` and executed by the harness from the `harness/` folder; `RUN` at the bottom of that file selects what runs. Each spec names the task, the model size, the store and the seed; the run ledger `runs/experiments.json` records what was actually run, including every configuration used in `PAPER.md`. Approximate wall times on the RTX 3060:
 
 | task level | spec | steps | time |
 |---|---|---:|---:|
@@ -45,7 +45,7 @@ Diagnostics (attention entropy and attention-to-marker per head, update ratios, 
 
 Offline scripts under `docs/plans/perf_prototypes/`, each taking a run id:
 
-- `c3_m1_shortcut_probe.py`: prediction against each single-condition mask, and the marked share by distance band (finding 5 in the README).
+- `c3_m1_shortcut_probe.py`: prediction against each single-condition mask, and the marked share by distance band (`PAPER.md` Sections 4.2 and 8.2).
 - `c3_wrong_token_probe.py`: the same crops under each condition token, plus attention-to-marker per head per token.
 - `c4_tolerant_metrics.py`, `c4_optcheck.py`, `c4_gallery.py`: the one-cell-tolerant line metrics, the optimality check of stored paths against a grid search, and a gallery of a path store.
 
@@ -61,16 +61,16 @@ ck = torch.load("c4b_detour.pt", map_location="cpu", weights_only=False)
 model = LocalGridViT(LocalGridViTConfig(**ck["model_config"])); model.load_state_dict(ck["model_state_dict"])
 ```
 
-`docs/figures_make.py` and `docs/figures_make2.py` regenerate the one-shot README figures from the ledger, the diagnostics files and these checkpoints.
+`docs/figures_make.py` and `docs/figures_make2.py` regenerate the one-shot figures of `PAPER.md` from the ledger, the diagnostics files and these checkpoints.
 
 The search rung adds four checkpoints in the same format, the Qwen track one LoRA adapter, and two bundles hold the
-evaluation data and the Qwen predictions (contents and sizes: README Table 7; commands: section 8):
+evaluation data and the Qwen predictions (contents and sizes: `PAPER.md` Table 7; commands: section 8):
 
 | file | run id | what |
 |---|---|---|
-| `c5_wave_search_256m.pt` | `c5_r5_wave_nat3_tok01_ownp50_from48k_L4_16k_g128_store100k` | the search at 256 m after one round of natural noise (the README's results table) |
+| `c5_wave_search_256m.pt` | `c5_r5_wave_nat3_tok01_ownp50_from48k_L4_16k_g128_store100k` | the search at 256 m after one round of natural noise (`PAPER.md` Tables 3 and 5) |
 | `c5_wave_search_512m.pt` | `c5_r5_wave_nat3_tok01_ownp50_r1_L4_16k_g256_b64_zc512` | the search at 512 m after one round of natural noise at that size |
-| `c5_wave_search_512m_hero.pt` | `c5_r5_wave_nat3_tok01_from_ownp50_L4_16k_g256_b64_zc512` | the search at 512 m before that round (README Figure 1) |
+| `c5_wave_search_512m_hero.pt` | `c5_r5_wave_nat3_tok01_from_ownp50_L4_16k_g256_b64_zc512` | the search at 512 m before that round (`PAPER.md` Figure 1, the README's animation) |
 | `c5_oneshot_256m_matched.pt` | `c5_os_bld_det_L4_64k_g128_store100k` | the budget-matched one-shot network (64k steps, no scratchpad) |
 | `qwen3vl2b_lora_route_v1_19k.zip` | Track A `lora20000_v1` | LoRA adapter for Qwen3-VL-2B-Instruct, 19.3k training routes; the base weights are not included |
 | `eval_bundle_v0.2.tar.gz` | – | district label stacks, validation route stores, Track A validation exports, per-route results of the paper's runs |
@@ -159,7 +159,7 @@ Wall times on the RTX 3060: about 4 s per optimizer step at effective batch 4, s
 
 ## 8. Reproducing the paper's tables from the release
 
-The evaluation numbers of Sections 5–7 of the README can be recomputed from a fresh clone and the release assets alone,
+The evaluation numbers of Sections 5–7 of `PAPER.md` can be recomputed from a fresh clone and the release assets alone,
 without rebuilding the districts or retraining. Everything below was run on 10 Oct 2026 from a fresh clone of this
 branch in `/tmp/verify_pub`, with nothing but the release files added; the results are in the table at the end.
 
@@ -257,7 +257,7 @@ PyTorch build and bf16 the release reproduces the paper exactly. A second check 
 brand-new Python 3.12 environment installed from `requirements.txt` and `requirements-track-a.txt` (torch 2.14.0+cu130,
 where the runs used 2.11.0+cu128), gave the same table: every row, and every route of every row with a per-route list,
 identical. On other hardware or on the CPU a few long routes
-can flip (Section 8.6 of the README: 4 of 200 routes, all with 6–9 fronts, between a CPU and a GPU run of the 256 m
+can flip (Section 8.6 of `PAPER.md`: 4 of 200 routes, all with 6–9 fronts, between a CPU and a GPU run of the 256 m
 network). Scripts fixed for this check: the evaluation scripts used to apply the data, checkpoint and ledger
 directories recorded in a run's `meta.json`, i.e. the training machine's paths; they now keep the clone's own, and
 `drawing_to_polyline.py` resolves the repo-relative paths of the released drawings.

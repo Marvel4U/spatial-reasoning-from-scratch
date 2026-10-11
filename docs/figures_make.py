@@ -1,4 +1,4 @@
-"""README figures F1-F8 for the public repository. Run from the source repo with its venv:
+"""Figures F1-F8 of the paper (PAPER.md) for the public repository. Run from the source repo with its venv:
   .venv/bin/python docs/figures_make.py  (writes to docs/figures/; reads runs/ and data/ of a full working copy)"""
 import sys, os, json, shutil
 from pathlib import Path

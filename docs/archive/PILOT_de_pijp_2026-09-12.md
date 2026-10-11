@@ -1,6 +1,6 @@
 # Pilot snapshot — Amsterdam, De Pijp (built 11–12 Sep 2026)
 
-*Historical document from 11–12 Sep 2026; kept as the project's trail. It is the report of the first data snapshot of De Pijp, before any task or model existed. Superseded by `worldsnap/` (the pipeline), `DATA_LICENSES.md` (sources, licences, vintages) and `README.md` §3 and §9.*
+*Historical document from 11–12 Sep 2026; kept as the project's trail. It is the report of the first data snapshot of De Pijp, before any task or model existed. Superseded by `worldsnap/` (the pipeline), `DATA_LICENSES.md` (sources, licences, vintages) and `PAPER.md` §3 and §9.*
 
 Purpose: prove that a frozen, local, per-layer "world snapshot" of a real district can be built from open data with no keys, no cleaning, and a per-layer manifest, and that every layer is real, aligned, and visually plausible. Seven layers, all done. No tasks, no model, no training code.
 

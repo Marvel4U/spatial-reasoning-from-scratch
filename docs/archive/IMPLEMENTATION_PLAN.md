@@ -1,6 +1,6 @@
 # IMPLEMENTATION_PLAN — local grid ViT (Track B)
 
-*Historical document from 21 Sep 2026; kept as the project's trail. It was the build plan for the first version of the from-scratch model and harness. Superseded by the code itself (`plain_gpt_module/`, `harness/`, `spatial_data/`) as described in `README.md` §9.*
+*Historical document from 21 Sep 2026; kept as the project's trail. It was the build plan for the first version of the from-scratch model and harness. Superseded by the code itself (`plain_gpt_module/`, `harness/`, `spatial_data/`) as described in `PAPER.md` §9.*
 
 Live specs: `LOCAL_MODEL_GUIDE.md`, `LOCAL_EXPERIMENTS.md`, `PLAN.md`.  
 Working style: **one model file per step** in Phase A (you review each diff); **Phase C harness in one batch** when model + data are ready.

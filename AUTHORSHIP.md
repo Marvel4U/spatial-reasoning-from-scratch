@@ -33,12 +33,12 @@ This is Marvin Uhlmann's project. The research direction, the task ladder, the d
 | text | who |
 |---|---|
 | the Track A report (`docs/reports/TRACK_A_QWEN_VANILLA_AND_SFT_2026-10-08.md`) | written by Marvin |
-| the search report (`docs/reports/C5_WAVE_SEARCH_2026-10-03.md`), the memos (`docs/memo/`), the comparison report (`docs/reports/COMPARISON_TABLE_2026-10-08.md`) and the README drafts | written by Claude from the runs, revised with Marvin |
+| the search report (`docs/reports/C5_WAVE_SEARCH_2026-10-03.md`), the memos (`docs/memo/`), the comparison report (`docs/reports/COMPARISON_TABLE_2026-10-08.md`) and the drafts of the README and `PAPER.md` | written by Claude from the runs, revised with Marvin |
 | the structure of this write-up: the paper form, its parts, the choice of figures | Marvin |
-| every number in the README | copied from a run's evaluation file or a report, with the source named; Marvin reviews the numbers against their sources before each release |
+| every number in `PAPER.md` and the README | copied from a run's evaluation file or a report, with the source named; Marvin reviews the numbers against their sources before each release |
 
-The design decisions of the experiments are Marvin's, as documented in the plans; the reports and the README describe them, they did not make them.
+The design decisions of the experiments are Marvin's, as documented in the plans; the reports, `PAPER.md` and the README describe them, they did not make them.
 
 Parts of Claude's share were built by Claude sub-agents (Opus and Sonnet models) working to Claude's specifications and reviewed by Claude before Marvin's review. Two of Claude's proposals during the search turned out wrong and are documented as such in the report (§5.3, §5.5).
 
-Every number in the README names the run it comes from; the run ledger (`runs/experiments.json`) holds the configuration of each.
+Every number in `PAPER.md` names the run or report it comes from; the run ledger (`runs/experiments.json`) holds the configuration of each.

@@ -1,11 +1,11 @@
 # Claims audit (11 Oct 2026)
 
-Every number in the public `README.md` (abstract, Tables 1–7, figure captions, Section 8, plus the Section 5–7 text that
+Every number in the public paper, `PAPER.md` (named `PAPER.md.md` until 11 Oct; abstract, Tables 1–7, figure captions, Section 8, plus the Section 5–7 text that
 Section 8 summarises) and the headline numbers of `docs/reports/C5_WAVE_SEARCH_2026-10-03.md`,
 `COMPARISON_TABLE_2026-10-08.md` and `TRACK_A_QWEN_VANILLA_AND_SFT_2026-10-08.md` (public copies on branch
 `c5-wave-search`), compared against the evaluation files of the private repository. Every value below was read
-programmatically from the file named; nothing was recomputed by rerunning a model. "Rounded" = equal at the README's
-precision. Audit by Claude; the README itself was not edited.
+programmatically from the file named; nothing was recomputed by rerunning a model. "Rounded" = equal at the paper's
+precision. Audit by Claude; the paper itself was not edited by the audit.
 
 **Paths.** Relative to the private repo `spatial_reasoning_LLM_artifact/`. `diag/X/` = `runs/diagnostics/<run X>/`.
 `CMP` = `docs/reports/COMPARISON_TABLE_2026-10-08.json` (identical in both repos). `TA` = `data/track_a/de_pijp_val_plain/`.
@@ -35,7 +35,7 @@ CMP: `rows[method].sets[set].solved_share | by_n_goal | failure_share | first200
 maze = `maze_v2_houses` (houses), maze v1 = thin walls, ZC512 = `zuid_centrum/crops/v4ns/c4_512_20k` val.
 Band sizes (2–3 / 4–5 / 6+): DP val 112 / 141 / 247; DP val first 200: 72 / 65 / 63; DP test 122 / 168 / 210;
 ZC val 132 / 163 / 205; maze val 205 / 141 / 154; ZC512 val 43 / 68 / 132 / 165 / 92 (2–3 / 4–5 / 6–8 / 9–12 / 13+);
-maze v1 val 42 / 34 / 124 (n = 200). All match the README and reports.
+maze v1 val 42 / 34 / 124 (n = 200). All match the PAPER.md and reports.
 
 **Seeds.** Every grid-model run: seed 4 (LED). Qwen LoRA runs: training seed 42 (`QS/lora*_v1/run_config.json`).
 Zero-shot Qwen: no training seed.
@@ -46,7 +46,7 @@ Status: **=** exact, **≈** rounded, **✗** mismatch, **?** not found in any f
 
 ### 1.1 Abstract and Figure 1
 
-| claim (as written) | README | run | file | key | file value | rule | routes | status |
+| claim (as written) | PAPER | run | file | key | file value | rule | routes | status |
 |---|---|---|---|---|---|---|---|---|
 | "2–4 blocks and 5–9 M parameters" (ladder) | 5–9 M | M1/C4 ladder | M1 report §3, Fig 4 caption | n_params | 4.8–8.7 M (Fig 4), 5.1 / 8.7 M (M1) | – | – | ≈ (report level) |
 | "8.9 M-parameter network" | 8.9 M | OWN | LED | summary.n_params | 8,856,409 | – | – | ≈ |
@@ -64,7 +64,7 @@ Status: **=** exact, **≈** rounded, **✗** mismatch, **?** not found in any f
 
 ### 1.2 Table 3 and Section 5 text (cell rule, single seed 4)
 
-| claim | README | run | file | key | file value | rule | routes | status |
+| claim | PAPER | run | file | key | file value | rule | routes | status |
 |---|---|---|---|---|---|---|---|---|
 | T3 DP val all / 2–3 / 4–5 / 6+ | 78 / 96 / 89 / 63 | OWN | diag/OWN/wave_rollout_eval_val500.json | free.* | 77.6 / 95.5 / 88.7 / 63.2 | cell | DP val 500 | ≈ |
 | T3 DP test | 73 / 97 / 85 / 49 | OWN | diag/OWN/wave_rollout_eval_test.json | free.* | 72.8 / 96.7 / 85.1 / 49.0 | cell | DP test 500 | ≈ |
@@ -98,7 +98,7 @@ Status: **=** exact, **≈** rounded, **✗** mismatch, **?** not found in any f
 
 ### 1.3 Tables 4–6 and Section 6–7 text
 
-| claim | README | run | file | key | file value | rule | routes | status |
+| claim | PAPER | run | file | key | file value | rule | routes | status |
 |---|---|---|---|---|---|---|---|---|
 | T4 2B zero-shot: 2.5 % / 6+ 0 % / endpoints | 2.5 / 0 | qwen_vanilla 2B | QV/eval_ab_n200.json | modes.two-pass.report | 0.025 (5/200) / 0.0 / wrong endpoints 0.92 | polyline | DP val first 200 | = |
 | T4 4B zero-shot: 24.5 % / 6+ **2 %** | 24.5 / 2 | qwen_vanilla 4B | QV/eval_ab_4b_n200.json | modes.two-pass.report | 0.245 (49/200) / **0.0159** (1/63) | polyline | DP val first 200 | ≈ for 24.5; 6+ ≈ at integer precision but the column uses one decimal elsewhere: should read **1.6 %** (CMP and Track A report say 1.6 %) |
@@ -131,7 +131,7 @@ Status: **=** exact, **≈** rounded, **✗** mismatch, **?** not found in any f
 
 ### 1.4 Section 8
 
-| claim | README | run | file | key | file value | rule | routes | status |
+| claim | PAPER | run | file | key | file value | rule | routes | status |
 |---|---|---|---|---|---|---|---|---|
 | 8.2 shortcut 0.41 IoU on ten configurations | 0.41 / 10 | M1 runs | M1 report §3, §7 | val IoU | 0.402–0.428 in ≥ 10 runs (harness accounting; 0.29 in the probe accounting) | IoU | val crops | ≈ (report level) |
 | 8.2 / 8.4 2-block 4 % vs 75 % | 4 / 75 | W2 / W48 | wave_rollout_eval.json | final_success | 0.040 / 0.750 | cell | DP val first 200 | = |
@@ -223,7 +223,7 @@ overlap with that extent from the stores' `origin` (x, y in district metres):
 | `c4_512_20k` | test | 512 m | 42 of 500 |
 | `c4_512_20k` | train | 512 m | 7,139 of 20,000 |
 
-Every README number for the "never-seen district" is on ZC **val** (0 overlap): supported. The C5 report's ZC **test**
+Every PAPER.md number for the "never-seen district" is on ZC **val** (0 overlap): supported. The C5 report's ZC **test**
 numbers (53.2 % W48; OWN 74.0 %, not reported) include the 33 overlapping windows; on the 467 clean routes they are
 52.7 % (W48) and 73.7 % (OWN), on the 33 overlapping ones 60.6 % and 78.8 %. The 512 m networks were trained on
 ZC512 train windows, 36 % of which overlap De Pijp; that is consistent with "trained only on Amsterdam" and
@@ -231,12 +231,12 @@ ZC512 train windows, 36 % of which overlap De Pijp; that is consistent with "tra
 
 ## 2. Mismatches (correct value and where to fix)
 
-1. **README Table 5, straight line, 4–5 fronts: 36 % → 35 %** (CMP 0.3546; double rounding via 35.5).
-2. **README Table 4, Qwen3-VL-4B zero-shot, 6+ fronts: 2 % → 1.6 %** (1 of 63; the column prints one decimal for every other row; CMP and the Track A report say 1.6 %). The integer "2 %" in Table 5 is fine.
-3. **README §5.4, "triples the share of clean final drawings (…) from 14 % to 42 %"**: 14 % (0.135) is from `wave_rollout_eval_cleanliness_cpu.json`, the first 200 routes on CPU; 42 % (0.416) is on all 500 on GPU. Same routes: first 200, 13.5 % → 59.0 % (GPU, CU3); for all 500 the pre-cleanup clean share was never measured. Same mix in C5 report §4.8 table ("clean 14 %, solved and clean 14 %").
-4. **README §5.4, "a trade of 8 points of success" → 7 points** (77.6 → 70.2 = 7.4). Same in C5 report §4.8.
-5. **README §5.3 and C5 report §5.5, "false cells on the backward hop fell from 180 to 98"**: 178.8 → 179, and the weight-1.0 file is on 491 samples while the 0.1 and 0 runs are on 299 (the report's caption says 299 for all). Either rerun the weight-1.0 diagnostic on the 299-sample set or state the two sample sets. Same file: new-cell recall 0.72 (not 0.73), erased 52 % (not 54 %).
-6. **README Figure 8 caption, "Solved lengths of 0.95–0.98 ×"**: the cleanup row's route 188 is 0.89 ×; write 0.89–0.98 × or restrict the sentence to the search and Qwen rows.
+1. **PAPER.md Table 5, straight line, 4–5 fronts: 36 % → 35 %** (CMP 0.3546; double rounding via 35.5).
+2. **PAPER.md Table 4, Qwen3-VL-4B zero-shot, 6+ fronts: 2 % → 1.6 %** (1 of 63; the column prints one decimal for every other row; CMP and the Track A report say 1.6 %). The integer "2 %" in Table 5 is fine.
+3. **PAPER.md §5.4, "triples the share of clean final drawings (…) from 14 % to 42 %"**: 14 % (0.135) is from `wave_rollout_eval_cleanliness_cpu.json`, the first 200 routes on CPU; 42 % (0.416) is on all 500 on GPU. Same routes: first 200, 13.5 % → 59.0 % (GPU, CU3); for all 500 the pre-cleanup clean share was never measured. Same mix in C5 report §4.8 table ("clean 14 %, solved and clean 14 %").
+4. **PAPER.md §5.4, "a trade of 8 points of success" → 7 points** (77.6 → 70.2 = 7.4). Same in C5 report §4.8.
+5. **PAPER.md §5.3 and C5 report §5.5, "false cells on the backward hop fell from 180 to 98"**: 178.8 → 179, and the weight-1.0 file is on 491 samples while the 0.1 and 0 runs are on 299 (the report's caption says 299 for all). Either rerun the weight-1.0 diagnostic on the 299-sample set or state the two sample sets. Same file: new-cell recall 0.72 (not 0.73), erased 52 % (not 54 %).
+6. **PAPER.md Figure 8 caption, "Solved lengths of 0.95–0.98 ×"**: the cleanup row's route 188 is 0.89 ×; write 0.89–0.98 × or restrict the sentence to the search and Qwen rows.
 7. **C5 report §5.5 counter test C (0.88 / 68 / 83 %)**: no file has these values; closest are 0.874 / 71.1 / 79.6 % (n = 491) and 0.888 / 78.1 / 80.5 % (lrflat, n = 299). Name the source run or correct.
 8. **C5 report §5.5 hypothesis 1 ("~7 false cells per sample, 23 % of the failing run's 167")**: 23 % of 167 is ~39 cells. One of the two numbers is wrong; the file (`…bwd2_banneal5_noisep1_L4…/wave_back_ties_wave_back.json`) gives tie + tie2 = 23.5 % of 166.8.
 9. **C5 report §7, thin-wall maze "500 routes per split" → 200**, and "0 % beyond" → "0 % beyond on val, 0.8 % (1 route) of 6+ on test". First-pass IoU 0.36 → 0.35 (file at 2 dp).
@@ -245,19 +245,19 @@ ZC512 train windows, 36 % of which overlap De Pijp; that is consistent with "tra
 12. **Track A report §3.4 item 1, "~+10 pts per ~2× data"** → about +4 per doubling from 1k to 5k and +9.5 per doubling from 5k to 19.3k.
 13. **Track A report §3.4 item 2, "4B vanilla (~27 % on val 200)"** → 24.5 % two-pass (27.0 % is the oracle mode); and on the same first 200 routes LoRA 19.3k solves 64.5 %, not ~50 %.
 14. **Track A report §1, "Wave has not yet been rescored with this polyline rule"**: stale; point to `COMPARISON_TABLE_2026-10-08.md`.
-15. **Not found in any file** (keep only with a source): README §7.2 / comparison report §4 "1.5 % of its chain cells against 0.2 %" (and "0.010" for the one-shot, no unit), and the conversion-sensitivity rescue counts behind "up to about 3 points".
+15. **Not found in any file** (keep only with a source): PAPER.md §7.2 / comparison report §4 "1.5 % of its chain cells against 0.2 %" (and "0.010" for the one-shot, no unit), and the conversion-sensitivity rescue counts behind "up to about 3 points".
 
 ## 3. Over-claims (sentences that say more than the cited evidence)
 
-1. **"The gap grows with route length everywhere"** (README §7.2 one-pass paragraph; §8.4 "and the gap grows with length"; C5 report §4.9). Search minus one-shot, cell rule, by 2–3 / 4–5 / 6+ fronts: De Pijp 10.7 / 38.3 / 37.3; Zuid + Centrum 12.1 / 27.0 / 31.7; house maze 44.4 / 46.1 / 5.8; ZC512 16.3 / 27.9 / 22.6; maze 512 43.6 / 57.8 / 7.1. Polyline, De Pijp: 9.9 / 47.5 / 47.4. Only Zuid + Centrum grows monotonically. Suggested: "The gap is smallest on the shortest routes everywhere; beyond 4 fronts it stays at 37–47 points on De Pijp and narrows on the mazes, where both methods fail on long routes."
-2. **"most on long routes and on the never-seen district"** (README §8.4; C5 report §4.6 "largest on long routes"). Natural-noise gains by band: De Pijp val +8.9 / +17.7 / +13.4, test +8.2 / +13.7 / +12.4, Zuid + Centrum +9.1 / +13.5 / +21.0. Suggested: "most on routes of 4 fronts and more, and most of all on the long routes of the never-seen district."
-3. **"Qwen always produces a line with roughly the right ends"** (README §7.3; comparison report §3 item 1). Fine-tuned 19.3k: 0 % unparseable but 11.4 % wrong endpoints; zero-shot 2B: 92 %. Suggested: "After fine-tuning, Qwen always produces a parseable line and misses an endpoint on 11 % of routes."
-4. **"the search never misses an endpoint, because the markers are an input plane"** (README §7.3). The zero is guaranteed by the scoring path: the conversion treats the 3 × 3 cells around each marker as lit and starts the chain at the markers, so a grid model cannot score "wrong endpoints". Suggested: "the grid models cannot miss an endpoint under this conversion (the chain starts at the markers); their failures show up as unconnected drawings."
+1. **"The gap grows with route length everywhere"** (PAPER.md §7.2 one-pass paragraph; §8.4 "and the gap grows with length"; C5 report §4.9). Search minus one-shot, cell rule, by 2–3 / 4–5 / 6+ fronts: De Pijp 10.7 / 38.3 / 37.3; Zuid + Centrum 12.1 / 27.0 / 31.7; house maze 44.4 / 46.1 / 5.8; ZC512 16.3 / 27.9 / 22.6; maze 512 43.6 / 57.8 / 7.1. Polyline, De Pijp: 9.9 / 47.5 / 47.4. Only Zuid + Centrum grows monotonically. Suggested: "The gap is smallest on the shortest routes everywhere; beyond 4 fronts it stays at 37–47 points on De Pijp and narrows on the mazes, where both methods fail on long routes."
+2. **"most on long routes and on the never-seen district"** (PAPER.md §8.4; C5 report §4.6 "largest on long routes"). Natural-noise gains by band: De Pijp val +8.9 / +17.7 / +13.4, test +8.2 / +13.7 / +12.4, Zuid + Centrum +9.1 / +13.5 / +21.0. Suggested: "most on routes of 4 fronts and more, and most of all on the long routes of the never-seen district."
+3. **"Qwen always produces a line with roughly the right ends"** (PAPER.md §7.3; comparison report §3 item 1). Fine-tuned 19.3k: 0 % unparseable but 11.4 % wrong endpoints; zero-shot 2B: 92 %. Suggested: "After fine-tuning, Qwen always produces a parseable line and misses an endpoint on 11 % of routes."
+4. **"the search never misses an endpoint, because the markers are an input plane"** (PAPER.md §7.3). The zero is guaranteed by the scoring path: the conversion treats the 3 × 3 cells around each marker as lit and starts the chain at the markers, so a grid model cannot score "wrong endpoints". Suggested: "the grid models cannot miss an endpoint under this conversion (the chain starts at the markers); their failures show up as unconnected drawings."
 5. **Section 4: "where it bends once it is right four times in five, and where it has to turn several corners it is right about seven times in ten"**. The source (C4 report N9) gives dilated IoU 0.92 / 0.78 / 0.73 on thirds by detour ratio, not a success frequency and not a corner count. Suggested: "dilated IoU 0.92 on near-straight routes, 0.78 on bending ones and 0.73 on the largest detours." (Section 4 is outside the audited sections but feeds §8.1.)
-6. **"Qwen3-VL-4B-Instruct … lands just below the straight-line floor"** (README §6.2; Track A §2.2 item 3). The 27.6 % floor is on 500 routes; the zero-shot rows are on the first 200, where the straight line solves 50.5 %. 4B two-pass (24.5 %) is at half the floor on its own routes. Suggested: "lands at half the straight-line floor on the same 200 routes (24.5 % against 50.5 %)."
-7. **"One pass against a loop, at the same budget … A single pass has no more steps to spend on a longer route"** (README §7.2). The matched one-shot draws on 2 m cells. The Section-4 one-shot network on 4 m cells (`c4n_bld_det_L4_16k_store100k`, `oneshot_route_eval_val500.json`) scores 64.8 % (91 / 84 / 42 %) on the same 500 De Pijp routes under the cell rule at its own 4 m cells, 45.4 % on Zuid + Centrum and 43.6 % on the house maze. Not comparable (coarser cells make the rule more lenient), but it shows the one-pass number depends on output resolution. Suggested: add "at 2 m output cells; the 4 m one-shot of Section 4 scores 65 % under the cell rule at its coarser cells" or name the resolution in the claim.
-8. **"The same 4-block transformer without scratchpad"** (README §7.1). The one-shot checkpoint has 8,840,240 parameters against 8,856,409 (the difference is exactly the readout token and the 41-way state head) and keeps a 17-channel patch embedding (`model_config.in_chans` = 17 in `c5_oneshot_256m_matched.pt`). Acceptable with "same trunk; no readout token or state head; the scratchpad plane is present but unused" (check the last part against the training config).
-9. **"Every result can be rebuilt from public data, the run ledger and released checkpoints"** (README §9 heading), "rerun every experiment" (§9.2), "Every number in this paper names the run it comes from" (§9.2). Section 4 numbers name reports, not runs; the release holds the Section 5–7 networks and one network per ladder level, not every experiment; the free-running numbers differ between CPU and GPU on 4 of 200 routes (§8.6); and this audit did not run `REPRODUCE.md` §8. Suggested heading: "Every number in Sections 5–7 can be recomputed from the released checkpoints and evaluation bundle (same GPU class, bf16; rollouts can differ by about 1 % of routes across devices)".
-10. **C5 report §4.3 and §7: Zuid + Centrum test labelled "(never seen)"**: 33 of its 500 windows overlap De Pijp. Report on the 467 clean routes (52.7 %) or add "(33 windows overlap De Pijp)". The README is not affected (it reports val only).
-11. **"transfers in part to a new district and a maze"** (README §5.2 heading) and "60 % in a district never seen in training" (abstract): supported (ZC val, 0 of 500 windows overlapping, single seed, one district). No change needed; keep "single seed" near it in the abstract if space allows.
-12. **README §5.2 timing "a whole free-running route … 57 ms on average"**: measured on 55 routes of mean 163 m walking, shorter than the validation median (195 m). Suggested: add "(55 routes, mean 163 m)".
+6. **"Qwen3-VL-4B-Instruct … lands just below the straight-line floor"** (PAPER.md §6.2; Track A §2.2 item 3). The 27.6 % floor is on 500 routes; the zero-shot rows are on the first 200, where the straight line solves 50.5 %. 4B two-pass (24.5 %) is at half the floor on its own routes. Suggested: "lands at half the straight-line floor on the same 200 routes (24.5 % against 50.5 %)."
+7. **"One pass against a loop, at the same budget … A single pass has no more steps to spend on a longer route"** (PAPER.md §7.2). The matched one-shot draws on 2 m cells. The Section-4 one-shot network on 4 m cells (`c4n_bld_det_L4_16k_store100k`, `oneshot_route_eval_val500.json`) scores 64.8 % (91 / 84 / 42 %) on the same 500 De Pijp routes under the cell rule at its own 4 m cells, 45.4 % on Zuid + Centrum and 43.6 % on the house maze. Not comparable (coarser cells make the rule more lenient), but it shows the one-pass number depends on output resolution. Suggested: add "at 2 m output cells; the 4 m one-shot of Section 4 scores 65 % under the cell rule at its coarser cells" or name the resolution in the claim.
+8. **"The same 4-block transformer without scratchpad"** (PAPER.md §7.1). The one-shot checkpoint has 8,840,240 parameters against 8,856,409 (the difference is exactly the readout token and the 41-way state head) and keeps a 17-channel patch embedding (`model_config.in_chans` = 17 in `c5_oneshot_256m_matched.pt`). Acceptable with "same trunk; no readout token or state head; the scratchpad plane is present but unused" (check the last part against the training config).
+9. **"Every result can be rebuilt from public data, the run ledger and released checkpoints"** (PAPER.md §9 heading), "rerun every experiment" (§9.2), "Every number in this paper names the run it comes from" (§9.2). Section 4 numbers name reports, not runs; the release holds the Section 5–7 networks and one network per ladder level, not every experiment; the free-running numbers differ between CPU and GPU on 4 of 200 routes (§8.6); and this audit did not run `REPRODUCE.md` §8. Suggested heading: "Every number in Sections 5–7 can be recomputed from the released checkpoints and evaluation bundle (same GPU class, bf16; rollouts can differ by about 1 % of routes across devices)".
+10. **C5 report §4.3 and §7: Zuid + Centrum test labelled "(never seen)"**: 33 of its 500 windows overlap De Pijp. Report on the 467 clean routes (52.7 %) or add "(33 windows overlap De Pijp)". The PAPER.md is not affected (it reports val only).
+11. **"transfers in part to a new district and a maze"** (PAPER.md §5.2 heading) and "60 % in a district never seen in training" (abstract): supported (ZC val, 0 of 500 windows overlapping, single seed, one district). No change needed; keep "single seed" near it in the abstract if space allows.
+12. **PAPER.md §5.2 timing "a whole free-running route … 57 ms on average"**: measured on 55 routes of mean 163 m walking, shorter than the validation median (195 m). Suggested: add "(55 routes, mean 163 m)".
