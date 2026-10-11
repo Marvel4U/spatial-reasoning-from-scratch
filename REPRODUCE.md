@@ -1,6 +1,6 @@
 # Reproduce
 
-Everything was run on one machine: Ubuntu, one RTX 3060 (12 GB), 30 GB RAM, Python 3.12, PyTorch 2.14 with CUDA. Wall times below are from that machine.
+Everything was run on one machine: Ubuntu, one RTX 3060 (12 GB), 30 GB RAM, Python 3.12, PyTorch 2.11.0 with CUDA 12.8. Wall times below are from that machine. `requirements.txt` pins torch 2.14.0 (CUDA 13.0 wheels); section 8 checks that a fresh environment from it gives the same results.
 
 ## 1. Environment
 
@@ -247,13 +247,16 @@ without `--rerun` (the cleanup network itself is not released).
 | (c) 512 m search, house maze 512 m val (Section 5.4) | 39.2 % (39 %) | 39.2 % | 0 / 500 |
 | (c) 512 m search before its noise round, house maze 512 m (Section 5.4) | 39.8 % (40 %) | 39.8 % | 0 / 500 |
 | (d) one-shot, budget-matched, De Pijp val, cell rule (Section 7.2) | 46.0 % | 46.0 % | 0 / 500 |
-| (e) 256 m search, De Pijp val, polyline rule (Table 5) | 76.4 % | 76.4 % | 0 / 500 (drawings and polylines byte-identical) |
+| (e) 256 m search, De Pijp val, polyline rule (Table 5) | 76.4 % | 76.4 % | 0 / 500 (drawings array-identical, polylines byte-identical) |
 | (f) Qwen3-VL-2B + LoRA 19.3k, polyline rule (Tables 4–6) | 49.6 % | 49.6 % | – |
 | (f) straight line between the markers (Table 5) | 27.6 % | 27.6 % | – (baseline file byte-identical) |
 | (f) LoRA 1k / 5k; zero-shot 2B / 4B two-pass (n = 200) | 21.4 / 31.0 / 2.5 / 24.5 % | 21.4 / 31.0 / 2.5 / 24.5 % | – |
 
 Every route agrees with the published per-route results, including the long 512 m rollouts (the De Pijp test row, published as aggregates only, agrees in every aggregate), so on the same GPU type,
-PyTorch build and bf16 the release reproduces the paper exactly. On other hardware or on the CPU a few long routes
+PyTorch build and bf16 the release reproduces the paper exactly. A second check on 11 Oct 2026, from a fresh clone in a
+brand-new Python 3.12 environment installed from `requirements.txt` and `requirements-track-a.txt` (torch 2.14.0+cu130,
+where the runs used 2.11.0+cu128), gave the same table: every row, and every route of every row with a per-route list,
+identical. On other hardware or on the CPU a few long routes
 can flip (Section 8.6 of the README: 4 of 200 routes, all with 6–9 fronts, between a CPU and a GPU run of the 256 m
 network). Scripts fixed for this check: the evaluation scripts used to apply the data, checkpoint and ledger
 directories recorded in a run's `meta.json`, i.e. the training machine's paths; they now keep the clone's own, and
