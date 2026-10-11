@@ -49,8 +49,8 @@ Artifacts: `runs/qwen_vanilla/eval_ab_n200.json`, `eval_ab_4b_n200.json`, preds 
    **geometry**: **chords through buildings** on ~**half** of all routes (51.5%), ~two thirds of the failures (103/151) (straight-ish polylines with few vertices). Oracle
    helps endpoints but **does not** fix crosses — the model "sees" the task but not obstacle-aware planning.
 
-3. **Matches plan expectations** (§2): straight/detour split; zero-shot near the **straight-line floor (~28%)** on
-   average only for **4B**, not 2B. Task needs **spatial computation + format**, not recognition alone.
+3. **Matches plan expectations** (§2): straight/detour split; zero-shot, **4B** two-pass reaches about half the
+   **straight-line floor** on the same 200 routes (24.5 % vs 50.5 %); 2B stays far below it. Task needs **spatial computation + format**, not recognition alone.
 
 4. **Coordinate convention** — 0–1000 grid aligned to image; marker probe works; free-form chat drifts. All training
    and eval use one conversion path in `coords.py`.
@@ -180,6 +180,6 @@ Straight-line baseline on full val: **27.6%** (plan §1).
 ## 6. Next steps (from plan, not done)
 
 - **F3–F5** ablations; **F6** transfer evals.
-- **Wave + c4 detour** scored with `track_a_export` for one comparison table.
+- **c4 detour** (the 4 m one-shot network) scored with `track_a_export`; the wave search is done (`COMPARISON_TABLE_2026-10-08.md`).
 - **`trl` SFTTrainer** parity pass.
 - Optional **GRPO** once policy failures are mostly scorer-verifiable (crosses / length).
