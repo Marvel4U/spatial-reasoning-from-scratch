@@ -93,7 +93,8 @@ def test_gpu_targets_mixed_tasks_in_one_batch():
         assert (got[i] == ref[0].astype(np.int64)).all()
 
 
-@pytest.mark.skipif(not CROPS.exists(), reason="de_pijp v3b cropset not present")
+@pytest.mark.skipif(not ((CROPS / "district_labels_1m.npz").is_file() and (CROPS / "split.json").is_file()),
+                    reason="de_pijp v3b district_labels_1m.npz or split.json not present")
 def test_district_windows_never_touch_held_out_ground():
     """10k on-the-fly train origins obey the crops.py rule, and cover train ground broadly."""
     from spatial_data.dataset_c2_gpu import load_district_planes
@@ -114,7 +115,7 @@ def test_district_windows_never_touch_held_out_ground():
     assert sampler.n_origins > 500_000
 
 
-@pytest.mark.skipif(not CROPS.exists(), reason="de_pijp v3b cropset not present")
+@pytest.mark.skipif(not any((CROPS / "val").glob("*_labels.npz")), reason="de_pijp v3b val crops not present")
 def test_val_grid_is_deterministic_and_complete():
     crops = load_crop_planes(CROPS, "val", DEV, max_items=12)
     specs = [get_c2_task(k) for k in C2_CORE_KEYS]

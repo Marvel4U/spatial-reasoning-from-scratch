@@ -54,6 +54,12 @@ def _rerun_smoke_cases():
 def test_c5_harness_pipeline_smoke(run_id: str, spec: dict, tmp_path: Path):
     crops = ROOT / "data/amsterdam/de_pijp/crops/v4"
     routes_dir = crops / spec["overrides"]["c4_routes_subdir"]
+    need = [crops / "district_labels_1m.npz", routes_dir / "c4_routes_train.npz", routes_dir / "c4_routes_val.npz"]
+    missing = [str(p.relative_to(ROOT)) for p in need if not p.is_file()]
+    if spec["overrides"].get("c4_mix_c3_task_keys") and not any((crops / "train").glob("*_labels.npz")):
+        missing.append("v4 train crops (*_labels.npz)")
+    if missing:
+        pytest.skip(f"{run_id}: needs {missing}")
     keys = spec["overrides"]["c4_task_keys"]
     assert c4_train_val_sidecars_ok(routes_dir, keys), f"{run_id}: missing train/val sidecars under {routes_dir} for {keys}"
     g = spec["overrides"].get("grid_out_size", config.grid_out_size)

@@ -19,12 +19,11 @@ CROPS = ROOT / "data" / "amsterdam" / "de_pijp" / "crops" / "v4"
 if not torch.cuda.is_available():
     pytest.skip("c3 GPU targets need cuda", allow_module_level=True)
 DEV = torch.device("cuda")
+pytestmark = pytest.mark.skipif(not any((CROPS / "val").glob("*_labels.npz")), reason="v4 val crops (*_labels.npz) not on disk")
 
 
 @pytest.mark.parametrize("rule", ["median_strict", "quietest_tertile"])
 def test_c3_targets_match_numpy(rule: str):
-    if not CROPS.is_dir():
-        pytest.skip("v4 crops not on disk")
     planes = load_crop_planes_v4(CROPS, "val", DEV, max_items=12)
     spec = get_c3_task(rule)
     rel = torch.full((planes.shape[0],), spec.relative_cond_id, device=DEV)

@@ -20,7 +20,16 @@ CROPS_V4 = ROOT / "data" / "amsterdam" / "de_pijp" / "crops" / "v4"
 DEV = torch.device("cuda") if torch.cuda.is_available() else torch.device("cpu")
 
 
-@pytest.mark.skipif(not CROPS_V4.is_dir(), reason="v4 crops not on disk")
+def _has_train_crops(crops: Path) -> bool:
+    return any((crops / "train").glob("*_labels.npz"))
+
+
+needs_v4 = pytest.mark.skipif(not _has_train_crops(CROPS_V4), reason="v4 train crops (*_labels.npz) not on disk")
+needs_v3b_v4 = pytest.mark.skipif(not (_has_train_crops(CROPS_V3B) and _has_train_crops(CROPS_V4)),
+                                  reason="v3b or v4 train crops (*_labels.npz) not on disk")
+
+
+@needs_v3b_v4
 def test_v4_rgb_planes_match_v3b_train_stack():
     v3 = load_crop_planes(CROPS_V3B, "train", DEV, max_items=32)
     v4 = load_crop_planes(CROPS_V4, "train", DEV, max_items=32)
@@ -28,7 +37,7 @@ def test_v4_rgb_planes_match_v3b_train_stack():
     assert torch.equal(v3, v4)
 
 
-@pytest.mark.skipif(not CROPS_V4.is_dir(), reason="v4 crops not on disk")
+@needs_v3b_v4
 def test_v4_c2_targets_match_v3b_for_core_task():
     v3 = load_crop_planes(CROPS_V3B, "train", DEV, max_items=8)
     v4 = load_crop_planes(CROPS_V4, "train", DEV, max_items=8)
@@ -39,7 +48,7 @@ def test_v4_c2_targets_match_v3b_for_core_task():
     assert torch.equal(t3, t4)
 
 
-@pytest.mark.skipif(not CROPS_V4.is_dir(), reason="v4 crops not on disk")
+@needs_v4
 def test_v4_npz_has_extra_planes():
     f = next((CROPS_V4 / "train").glob("*_labels.npz"))
     with np.load(f) as z:

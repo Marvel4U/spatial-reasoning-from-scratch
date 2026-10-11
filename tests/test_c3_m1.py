@@ -25,6 +25,18 @@ from spatial_data.dataset_c3_gpu import load_crop_planes_v4
 
 CROPS = ROOT / "data" / "amsterdam" / "de_pijp" / "crops" / "v4"
 DIST = ROOT / "data" / "amsterdam" / "de_pijp"
+
+
+def _has_crops(split: str) -> bool:
+    """True if the v4 cropset has *_labels.npz crop files for `split` (what load_crop_planes_v4 reads)."""
+    return any((CROPS / split).glob("*_labels.npz"))
+
+
+def _has_markers(split: str) -> bool:
+    """Crop files plus the t0 marker index that marker_table_for_split reads."""
+    return _has_crops(split) and (DIST / "tasks" / "t0_point_v0" / f"{split}.jsonl").is_file()
+
+
 if not torch.cuda.is_available():
     pytest.skip("cuda required", allow_module_level=True)
 DEV = torch.device("cuda")
@@ -39,8 +51,8 @@ def test_m1_spec_cond_tokens():
 
 
 def test_m1_targets_match_numpy():
-    if not CROPS.is_dir():
-        pytest.skip("v4 missing")
+    if not _has_markers("val"):
+        pytest.skip("v4 val crops or val marker index missing")
     planes = load_crop_planes_v4(CROPS, "val", DEV, max_items=8)
     cols, rows = marker_table_for_split(CROPS, DIST, "val")
     estab_np = planes[:, 2].cpu().numpy()
