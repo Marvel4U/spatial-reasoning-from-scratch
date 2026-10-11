@@ -16,9 +16,9 @@ from spatial_data.c3_targets import c3_targets_from_planes
 from spatial_data.dataset_c3_gpu import load_crop_planes_v4
 
 CROPS = ROOT / "data" / "amsterdam" / "de_pijp" / "crops" / "v4"
-DEV = torch.device("cuda") if torch.cuda.is_available() else pytest.param(
-    "cuda", marks=pytest.mark.skip(reason="c3 GPU targets need cuda")
-)
+if not torch.cuda.is_available():
+    pytest.skip("c3 GPU targets need cuda", allow_module_level=True)
+DEV = torch.device("cuda")
 
 
 @pytest.mark.parametrize("rule", ["median_strict", "quietest_tertile"])

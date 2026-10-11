@@ -15,7 +15,9 @@ from spatial_data.dataset_c3_gpu import C3MultiTaskGpuTrainLoader, load_crop_pla
 
 CROPS = ROOT / "data" / "amsterdam" / "de_pijp" / "crops" / "v4"
 DIST = ROOT / "data" / "amsterdam" / "de_pijp"
-DEV = torch.device("cuda") if torch.cuda.is_available() else pytest.skip("cuda required")
+if not torch.cuda.is_available():
+    pytest.skip("cuda required", allow_module_level=True)
+DEV = torch.device("cuda")
 
 
 def test_n5_mix_cond_ids_distinct():

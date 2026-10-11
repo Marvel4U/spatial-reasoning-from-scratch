@@ -18,7 +18,9 @@ from spatial_data.dataset_c3_gpu import load_crop_planes_v4
 
 CROPS = ROOT / "data" / "amsterdam" / "de_pijp" / "crops" / "v4"
 DIST = ROOT / "data" / "amsterdam" / "de_pijp"
-DEV = torch.device("cuda") if torch.cuda.is_available() else pytest.skip("cuda required")
+if not torch.cuda.is_available():
+    pytest.skip("cuda required", allow_module_level=True)
+DEV = torch.device("cuda")
 
 
 @pytest.mark.parametrize("radius_m", [20, 50, 75, 100])
