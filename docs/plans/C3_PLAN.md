@@ -410,7 +410,7 @@ Marvin's concern: a per-task decision threshold does not scale to compound or in
 | E8-disc3 | **disc3 batch** L2 + relV2 (10 runs) | Marvin | **done** — §5g-vi |
 | E8-disc3-m1 | **`food_drink_within_100m_L4_8k_b32_disc3_relV2`** | Marvin | **done** — §5g-vii **IoU ~0.80** |
 | N5b | m1 **warm-start** from `within_100m_*_disc3_relV2` + optional K=4 | Marvin | **not run** — fastest test of remaining conjunctive gap |
-| N6 | Record in `LEARNING_REPORT.md` and `LOCAL_EXPERIMENTS.md`; then c4 | both | after N5b or accept §5g-vii number |
+| N6 | Record in `docs/archive/LEARNING_REPORT.md` and `docs/archive/LOCAL_EXPERIMENTS.md`; then c4 | both | after N5b or accept §5g-vii number |
 | E5b | Relative position bias (§8) | Marvin | **done** — §8.6; **on** with **disc3** (m0 + m1 L4); **off** on **pixel** m1 |
 
 **Next:** N5b (warm-start / K=4) or N6 with §5g-vii as m1 result. Default harness recipe for new marker tasks: **`marker_radius_px=3`**, m0 **`rel_pos_bias=all`**, m1 conjunctive at least **disc3 + relV2** at E8 scale.

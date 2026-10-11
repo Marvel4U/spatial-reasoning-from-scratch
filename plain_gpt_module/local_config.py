@@ -1,4 +1,4 @@
-"""Config for the local grid ViT (c0 defaults from LOCAL_EXPERIMENTS / IMPLEMENTATION_PLAN)."""
+"""Config for the local grid ViT (c0 defaults from docs/archive/LOCAL_EXPERIMENTS.md / IMPLEMENTATION_PLAN.md)."""
 from __future__ import annotations
 
 from dataclasses import dataclass

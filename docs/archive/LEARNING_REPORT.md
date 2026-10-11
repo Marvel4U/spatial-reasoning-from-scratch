@@ -1,8 +1,10 @@
 # LEARNING_REPORT — Track B local grid ViT (c0 + c1)
 
-Living log of **what we ran**, **what it shows**, and **what it does not show**. Canonical numbers live in `runs/experiments.json`; checkpoints under `runs/checkpoints/`. Specs: `LOCAL_MODEL_GUIDE.md`, `LOCAL_EXPERIMENTS.md`, `IMPLEMENTATION_PLAN.md`, `docs/plans/C1_PLAN.md`, `PLAN.md`.
+*Historical document from 21–22 Sep 2026; kept as the project's trail. It is the running log of the first rungs (c0, c1, c2) of the from-scratch model, including open questions and backlogs as they stood then. Superseded by `README.md` and the reports in `docs/reports/`; later rungs are documented in `docs/plans/C3_PLAN.md` to `docs/plans/C5_PLAN.md`. Run numbers remain canonical in `runs/experiments.json`.*
 
-**Last updated:** 22 Sep 2026 (c2 L6 + **held-out wrong-description** eval; [`C2_PLAN.md`](docs/plans/C2_PLAN.md)).
+Living log of **what we ran**, **what it shows**, and **what it does not show**. Canonical numbers live in `runs/experiments.json`; checkpoints under `runs/checkpoints/`. Specs: `LOCAL_MODEL_GUIDE.md` (repository root), `LOCAL_EXPERIMENTS.md`, `IMPLEMENTATION_PLAN.md`, `docs/plans/C1_PLAN.md`, `PLAN.md`.
+
+**Last updated:** 22 Sep 2026 (c2 L6 + **held-out wrong-description** eval; [`C2_PLAN.md`](../../docs/plans/C2_PLAN.md)).
 
 ---
 
@@ -13,7 +15,7 @@ Living log of **what we ran**, **what it shows**, and **what it does not show**.
 | **Model** | `LocalGridViT` ~3.96M params | 2× `EncoderBlock`, `n_embd=384`, `h_heads=6`, patch P=16, grid 64×64, K=2 |
 | **Input** | Cin=4 (scalar) or **13 (one-hot)** | **Decided:** one-hot @ P=16 on v3b; c2 runs set `encoding_mode=onehot`; global harness default still scalar (optional flip) |
 | **Task input (c2)** | **Condition tokens** (13-way + pad, 2 slots) | Prefix before 256 patches; D1 **done** — gate ≈ one-hot L5b |
-| **Cropset** | `v3b` for c1/c2 forward work | Footprint estab + 1000 m² cap; same crop ids as v2 ([`ESTAB_FOOTPRINTS`](docs/memo/ESTAB_FOOTPRINTS_2026-09-21.md)) |
+| **Cropset** | `v3b` for c1/c2 forward work | Footprint estab + 1000 m² cap; same crop ids as v2 ([`ESTAB_FOOTPRINTS`](../../docs/memo/ESTAB_FOOTPRINTS_2026-09-21.md)) |
 | **Target (c0)** | One fg cell on 64×64 grid | Marker echo — *not* T0 class readout |
 | **Loss** | Class-weighted CE (`balanced_ce=True`) | Weights `[1, n_bg/n_fg]` on per-cell CE (~4095:1 for c0) |
 | **Harness** | `harness/` | `python harness.py` from `harness/`; logs to `runs/experiments.json` |
@@ -34,11 +36,11 @@ Living log of **what we ran**, **what it shows**, and **what it does not show**.
 | **B4** | Harness ↔ worldsnap (`harness/data.py`, config caps) | Done |
 | **B5** | Separate `setup.py` | Skipped — device lives in `harness/data.py` |
 | **C** | Harness train/eval/checkpoint/resume | Done |
-| **Analysis** | Tier1/2 diagnostics + `analysis/view_sample` | Done — [`analysis/README.md`](analysis/README.md), [`docs/plans/ANALYSIS_SUITE_SPEC.md`](docs/plans/ANALYSIS_SUITE_SPEC.md) §0 |
-| **Perf** | GPU-resident loader, vectorized eval, thread cap | Done — [`docs/plans/PERF_BASELINE_2026-09-21.md`](docs/plans/PERF_BASELINE_2026-09-21.md) |
-| **c1 data/model** | `spatial_data/c1_*`, `task_emb`, multi-task loaders | Done — [`C1_PLAN.md`](docs/plans/C1_PLAN.md) |
-| **D** | Sanity ladder L1–L6 | c0 L1–L3; **c1 L5a–L5c** (§3.9–3.12); **c2 L6a–c** **done** §3.15 ([`C2_PLAN.md`](docs/plans/C2_PLAN.md) §7); L6d + polish **optional** |
-| **Memos** | Target + eval conventions | [`ESTAB_FOOTPRINTS`](docs/memo/ESTAB_FOOTPRINTS_2026-09-21.md), [`BALANCING_AND_DECISION_RULE`](docs/memo/BALANCING_AND_DECISION_RULE_2026-09-21.md) |
+| **Analysis** | Tier1/2 diagnostics + `analysis/view_sample` | Done — [`analysis/README.md`](../../analysis/README.md), [`docs/plans/ANALYSIS_SUITE_SPEC.md`](../../docs/plans/ANALYSIS_SUITE_SPEC.md) §0 |
+| **Perf** | GPU-resident loader, vectorized eval, thread cap | Done — [`docs/plans/PERF_BASELINE_2026-09-21.md`](../../docs/plans/PERF_BASELINE_2026-09-21.md) |
+| **c1 data/model** | `spatial_data/c1_*`, `task_emb`, multi-task loaders | Done — [`C1_PLAN.md`](../../docs/plans/C1_PLAN.md) |
+| **D** | Sanity ladder L1–L6 | c0 L1–L3; **c1 L5a–L5c** (§3.9–3.12); **c2 L6a–c** **done** §3.15 ([`C2_PLAN.md`](../../docs/plans/C2_PLAN.md) §7); L6d + polish **optional** |
+| **Memos** | Target + eval conventions | [`ESTAB_FOOTPRINTS`](../../docs/memo/ESTAB_FOOTPRINTS_2026-09-21.md), [`BALANCING_AND_DECISION_RULE`](../../docs/memo/BALANCING_AND_DECISION_RULE_2026-09-21.md) |
 
 ---
 
@@ -195,7 +197,7 @@ python -m diagnostics.plot_run c0_worldsnap_P16_2k --compare c0_worldsnap_P16_2k
 
 | | |
 |--|--|
-| **Purpose** | Validate c1 mask targets, GPU loader, plain CE, c1 eval before task conditioning ([`C1_PLAN.md`](docs/plans/C1_PLAN.md) §10 L5a) |
+| **Purpose** | Validate c1 mask targets, GPU loader, plain CE, c1 eval before task conditioning ([`C1_PLAN.md`](../../docs/plans/C1_PLAN.md) §10 L5a) |
 | **Task** | Surface **building**, majority downsampling; marker channel **zeros**; **no** `task_emb` |
 | **Setup** | P=16, B=16, 2k steps, `worldsnap_gpu_resident`, de_pijp v2; **2000 train / 250 val crops** (pool cap on rig) |
 | **Pass** | Val **IoU_pure_cells = 1.0** @ step 1999 (proposal ≥ 0.9); **IoU_fg ≈ 0.986**, IoU_mixed ≈ 0.945 |
@@ -211,7 +213,7 @@ python -m diagnostics.plot_run c0_worldsnap_P16_2k --compare c0_worldsnap_P16_2k
 | **Cropset** | **v2** — 2 m establishment discs, estab targets use **“any”** pixel rule |
 | **Setup** | P=16, B=16, 2k steps, diagnostics on; val **512 fixed (crop, task) pairs** |
 
-**Spatial eval @ step 1999:** IoU_fg **0.828**; pure/mixed **0.818 / 0.760**; P/R **0.837 / 0.986**. Per-task IoU: building **0.969**, sidewalk **0.846**, noise≥65 **0.989**, food & drink **0.463**. `empty_target_fp_rate ≈ 0.73` (estab empties + w≈100 → over-marking). See [`docs/memo/ESTAB_FOOTPRINTS_2026-09-21.md`](docs/memo/ESTAB_FOOTPRINTS_2026-09-21.md).
+**Spatial eval @ step 1999:** IoU_fg **0.828**; pure/mixed **0.818 / 0.760**; P/R **0.837 / 0.986**. Per-task IoU: building **0.969**, sidewalk **0.846**, noise≥65 **0.989**, food & drink **0.463**. `empty_target_fp_rate ≈ 0.73` (estab empties + w≈100 → over-marking). See [`docs/memo/ESTAB_FOOTPRINTS_2026-09-21.md`](../../docs/memo/ESTAB_FOOTPRINTS_2026-09-21.md).
 
 **Takeaway:** **Task_emb works** on area tasks at P=16. v2 estab failure is largely **geometry + loss weight**, not missing conditioning — superseded on v3b (§3.11).
 
@@ -219,7 +221,7 @@ python -m diagnostics.plot_run c0_worldsnap_P16_2k --compare c0_worldsnap_P16_2k
 
 | | |
 |--|--|
-| **Purpose** | Same L5b recipe on **building-hosted establishment** labels (1000 m² host cap); [`ESTAB_FOOTPRINTS`](docs/memo/ESTAB_FOOTPRINTS_2026-09-21.md) |
+| **Purpose** | Same L5b recipe on **building-hosted establishment** labels (1000 m² host cap); [`ESTAB_FOOTPRINTS`](../../docs/memo/ESTAB_FOOTPRINTS_2026-09-21.md) |
 | **Cropset** | **v3b** — estab **majority** downsampling; food & drink fg weight **≈41** (not clamp 100) |
 | **Setup** | P=16, B=16, 2k steps; same crop ids as v2 (noise/surface bit-identical) |
 
@@ -249,7 +251,7 @@ Train on **10/12** atomic (layer, class) pairs; val includes held-out tasks. **P
 
 **v3b @ 2k per-task (spatial eval):** noise **0.97–0.98**, surface building **0.95**, sidewalk **0.78**, estab food **0.47**, estab other **0.58**. Diagnostics: `runs/diagnostics/c1_L5c_factorised_2k_v3b_plots.png`.
 
-**Why c2 replaces L5c-style factorisation:** summing `layer_emb[L] + class_emb[k]` **cannot bind** layer to class. **Decided (22 Sep):** **condition tokens** — one embedding per (layer, class), fixed length-2 prefix before patch tokens ([`C2_PLAN.md`](docs/plans/C2_PLAN.md) §4).
+**Why c2 replaces L5c-style factorisation:** summing `layer_emb[L] + class_emb[k]` **cannot bind** layer to class. **Decided (22 Sep):** **condition tokens** — one embedding per (layer, class), fixed length-2 prefix before patch tokens ([`C2_PLAN.md`](../../docs/plans/C2_PLAN.md) §4).
 
 ### 3.13 C2 prep — encoding sweep, balancing memo, data/eval plumbing
 
@@ -264,7 +266,7 @@ Train on **10/12** atomic (layer, class) pairs; val includes held-out tasks. **P
 
 Sidewalk was limited mainly by **scalar grey-level ambiguity** (0.67 between roadway and building), not patch size alone. Runs: `c1_L5b_core_four_2k_v3b_{onehot_P16,scalar_P8,onehot_P8}` in `experiments.json`.
 
-**Balancing memo** ([`BALANCING_AND_DECISION_RULE_2026-09-21.md`](docs/memo/BALANCING_AND_DECISION_RULE_2026-09-21.md)): weighted CE shifts fg log-odds by `log w`; **decision rule** `P(fg) > w/(1+w)` recovers most of the gap to a per-task oracle threshold on existing checkpoints (e.g. v3b L5b food & drink 0.807 → **0.885** at plain 0.5 vs rule). **c2 eval:** rule + oracle + condition-failure attribution in **`harness/eval_c2.py`** (C2_PLAN §6 B1). **c1 / plot 4:** rule/oracle in shared eval rows still **open** (B2).
+**Balancing memo** ([`BALANCING_AND_DECISION_RULE_2026-09-21.md`](../../docs/memo/BALANCING_AND_DECISION_RULE_2026-09-21.md)): weighted CE shifts fg log-odds by `log w`; **decision rule** `P(fg) > w/(1+w)` recovers most of the gap to a per-task oracle threshold on existing checkpoints (e.g. v3b L5b food & drink 0.807 → **0.885** at plain 0.5 vs rule). **c2 eval:** rule + oracle + condition-failure attribution in **`harness/eval_c2.py`** (C2_PLAN §6 B1). **c1 / plot 4:** rule/oracle in shared eval rows still **open** (B2).
 
 **c2 data (22 Sep):** `spatial_data/c2_tasks.py`, GPU loaders + district sampler, cached `c2_task_stats.json`, 21 tests — see C2_PLAN §6 A1–A5, C2.
 
@@ -415,7 +417,7 @@ Edit `experiments.py` → **`RUN`**. Spatial eval + `c0 snap` during train (`tra
 | `c1_L5b_core_four_2k_v3b` / `c1_L5c_factorised_2k_v3b` | c1 v3b scalar | **Done** §3.11–3.12 |
 | `c1_L5b_core_four_2k_v3b_onehot_P{16,8}` + scalar_P8 | C2_PLAN P2 | **Done** §3.13 |
 | `c1_L5c_factorised_{2k,4k}` | L5c v2 discs | **Done** §3.12 (baseline) |
-| **B2** | Rule/oracle in c1 `eval_spatial` + plot 4 | c2 done in `eval_c2.py`; [`BALANCING` memo](docs/memo/BALANCING_AND_DECISION_RULE_2026-09-21.md) |
+| **B2** | Rule/oracle in c1 `eval_spatial` + plot 4 | c2 done in `eval_c2.py`; [`BALANCING` memo](../../docs/memo/BALANCING_AND_DECISION_RULE_2026-09-21.md) |
 | **D1–D2** | Condition tokens + 4-tuple batch | **Done** §3.15 |
 | **L6a–L6c** | c2 conjunction ladder | **Done** §3.15 |
 | **L6d** | CE+Dice vs dampened CE | **Done** §3.15 — dampened CE + rule retained for c3 |
@@ -446,7 +448,7 @@ Edit `experiments.py` → **`RUN`**. Spatial eval + `c0 snap` during train (`tra
 |------|--------|
 | **c1** L5a–L5c | **Done** on v3b (scalar + one-hot L5b §3.11–3.13) |
 | **c2** L6 | **Closed for capability** (§3.15); optional B2/B3, L6d |
-| **c3** | Crop-relative tasks — **next** Track B step; [`C3_PLAN.md`](docs/plans/C3_PLAN.md) |
+| **c3** | Crop-relative tasks — **next** Track B step; [`C3_PLAN.md`](../../docs/plans/C3_PLAN.md) |
 
 c0 remains **closed for plumbing**. c1 + **c2** are **shippable** on v3b + one-hot + condition tokens for multi-layer AND + held-out conj evidence.
 
@@ -501,11 +503,11 @@ Crop-relative phrasing → **c3** (`C3_PLAN.md`).
 
 | Tool | Path |
 |------|------|
-| Task viewer (c0/c1 panels A–G) | `python -m analysis.view_sample` — [`analysis/README.md`](analysis/README.md); c1: `--task-rung c1 --c1-task …` |
+| Task viewer (c0/c1 panels A–G) | `python -m analysis.view_sample` — [`analysis/README.md`](../../analysis/README.md); c1: `--task-rung c1 --c1-task …` |
 | Training diagnostics | `diagnostics_enabled=True`; `python -m diagnostics.plot_run RUN_ID` |
-| Panel glossary | [`runs/diagnostics/VIEWER_PANELS.md`](runs/diagnostics/VIEWER_PANELS.md) |
+| Panel glossary | [`runs/diagnostics/VIEWER_PANELS.md`](../../runs/VIEWER_PANELS.md) |
 
-**Performance (Sep 2026 plan implemented):** [`docs/plans/PERFORMANCE_PLAN_2026-09-21.md`](docs/plans/PERFORMANCE_PLAN_2026-09-21.md). Measured ladder: [`docs/plans/PERF_BASELINE_2026-09-21.md`](docs/plans/PERF_BASELINE_2026-09-21.md).
+**Performance (Sep 2026 plan implemented):** [`docs/plans/PERFORMANCE_PLAN_2026-09-21.md`](../../docs/plans/PERFORMANCE_PLAN_2026-09-21.md). Measured ladder: [`docs/plans/PERF_BASELINE_2026-09-21.md`](../../docs/plans/PERF_BASELINE_2026-09-21.md).
 
 | Step | Change | P=16 B=32 on 3060 (indicative) |
 |------|--------|--------------------------------|

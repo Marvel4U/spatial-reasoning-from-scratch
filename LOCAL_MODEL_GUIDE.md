@@ -1,5 +1,7 @@
 # LOCAL_MODEL_GUIDE — how a vision model works, built from `plain_gpt_module`
 
+> **Status 11 Oct 2026.** This guide was written on 20 Sep 2026, before any model code existed; the sentence below saying that no code for the local model exists is no longer true. The model it describes now exists in `plain_gpt_module/` (`patch_embed.py`, `pos_embed.py`, `grid_head.py`, `local_grid_vit.py`, `rel_pos_bias.py`) and is summarised in `README.md` §9. §1–§5 and §8–§9 still explain that code. Outdated: §6, §7 and §11 list choices that have since been made (16 px patches, one-hot input plus a marker plane, fixed 2-D sine-cosine positions, the 64 × 64 grid head first, new files inside `plain_gpt_module/`, 2 or 4 blocks at width 384); the task id entered as two condition tokens, not as the added embedding proposed in §13; a learned relative position bias per block was added later and is not covered here; §10's ladder was run as recorded in `docs/archive/LEARNING_REPORT.md` §7. The decisions themselves are recorded in `docs/archive/LOCAL_EXPERIMENTS.md`.
+
 Written for Marvin, 20 Sep 2026. Baseline assumed: you understand every line of `plain_gpt_module` and nothing about vision models. This file explains, it does not decide. Snippets are illustrations for you to type, change, or reject; no code for the local model exists anywhere in the repo. Where a real choice exists it is marked **CHOICE** and collected in §10.
 
 ---
@@ -222,7 +224,7 @@ Things worth plotting along the way: accuracy against `boundary_dist_px`; the le
 6. Where the code lives: new files inside `plain_gpt_module`, or a sibling package that imports from it.
 7. Model size. Your translator's 384 / 6 heads / 6 layers is a sensible default, not a recommendation.
 
-Earlier documents got ahead of you here: the Track B column in `PLAN.md` and the Track B fields in the task items (`task_token`, `marker_256`, `target_token`) are **proposals**, cheap to regenerate once you have decided.
+Earlier documents got ahead of you here: the Track B column in `PLAN.md` (now `docs/archive/PLAN.md`) and the Track B fields in the task items (`task_token`, `marker_256`, `target_token`) are **proposals**, cheap to regenerate once you have decided.
 
 ## 12. If you want to see one reference implementation first
 
@@ -232,7 +234,7 @@ Earlier documents got ahead of you here: the Track B column in `PLAN.md` and the
 
 ## 13. Questions and answers (Marvin, 20 Sep)
 
-Decisions taken after this round are in `LOCAL_EXPERIMENTS.md`.
+Decisions taken after this round are in `LOCAL_EXPERIMENTS.md` (now `docs/archive/LOCAL_EXPERIMENTS.md`).
 
 **Is the patch projection the same for every patch?** Yes. One `nn.Linear`, applied along the last axis of `(B, N, P·P·Cin)`, so the same matrix hits all N patches, exactly as one `wte` table serves every position in a sentence. Where a patch sits enters only through the position code added afterwards. This weight sharing is the one spatial prior a plain ViT has: a pattern is embedded identically wherever it occurs.
 

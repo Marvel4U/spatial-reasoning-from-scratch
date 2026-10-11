@@ -1,5 +1,7 @@
 # LOCAL_EXPERIMENTS — Marvin's decisions and the experimental dimensions for the local model
 
+*Historical document from 20–23 Sep 2026; kept as the project's trail. It records Marvin's first design decisions for the from-scratch model and the results of rungs c0–c2. Superseded by `README.md` and the rung plans `docs/plans/C1_PLAN.md` to `docs/plans/C5_PLAN.md`.*
+
 Set 20 Sep 2026 after working through `LOCAL_MODEL_GUIDE.md`. Marvin implements; this file records what he decided and what he wants to test. Update it as results come in.
 
 ## Decisions for the first version

@@ -1,5 +1,7 @@
-# OPEN_DECISIONS — not yet decided; do NOT silently decide these
-Status 11 Sep 2026. Each needs Marvin's call (Claude proposes, Marvin decides — he defends every choice in interviews). Move decided items to the bottom with date + rationale.
+# OPEN_DECISIONS — the decision trail of the planning phase
+*Status 11 Oct 2026: kept as the project's decision trail from the planning phase (11–20 Sep 2026). Repository name, public timing and licensing are now decided (see Decided). The other items still under Open belong to the original plan for a tool-using Qwen agent trained with GRPO; the project went another way after 19 Sep (see `docs/archive/PLAN.md` and `README.md`), and they are left as they stood, undecided.*
+
+Original status 11 Sep 2026. Each needs Marvin's call (Claude proposes, Marvin decides — he defends every choice in interviews). Move decided items to the bottom with date + rationale.
 
 ## Open
 0. **(m) Layers in v1** (proposal: buildings+heights, sidewalks, static GTFS, noise, computed shadow, POIs, trees). **(n) Which public benchmarks we commit to** (MapEval-API / -Visual / MapReason-OSM). See survey §5.
@@ -8,20 +10,20 @@ Status 11 Sep 2026. Each needs Marvin's call (Claude proposes, Marvin decides �
 3. **(c) Model class.** 3–4B (cheaper GRPO, more dramatic deltas vs the 7% baseline) vs 7–8B (stronger starting perception). Also which family/version — check what's current at kickoff (Qwen-VL default assumption).
 4. **(d) P3 scope.** In the repo as aspirational chapter, or out entirely until Stages 1–2 ship? (Lean: aspirational chapter.)
 5. **(e) OSM transfer demo.** Commit to it (strong closer, extra work: real-layer plumbing) or synthetic-only for v1?
-6. **(f) Authorship split for this project.** The sprint's learning rule was "Marvin types all core code." For this bigger build: which components are Marvin-typed (proposal: model/LoRA configs, GRPO loop, reward/verifier logic) vs collaborative (proposal: generator plumbing, eval infra, data pipelines, viewers)? Confirm explicitly.
+6. **(f) Authorship split for this project.** The sprint's learning rule was "Marvin types all core code." For this bigger build: which components are Marvin-typed (proposal: model/LoRA configs, GRPO loop, reward/verifier logic) vs collaborative (proposal: generator plumbing, eval infra, data pipelines, viewers)? Confirm explicitly. *(Settled 19 Sep, see Decided.)*
 7. **(g) Where DPO lives in the portfolio.** This project doesn't naturally exercise DPO. Bolt a small DPO chapter onto something cheap elsewhere, or let GRPO supersede it narratively? (Interviews test whether he can whiteboard both losses — that's independent of the repo.)
-8. **(h) Repo name + public timing.** Working folder name `spatial_reasoning_LLM_artifact`; public GitHub name TBD. Publish early-and-iterate vs publish-when-Stage-1-done?
-9. **(i) Relationship to the GPT-2 repro track.** It's still pending in `llm_qualification_projects` (FineWeb prep was going to be Marvin-with-Cursor). Sequencing: GPT-2 first, parallel, or after Stage 1?
+8. **(i) Relationship to the GPT-2 repro track.** It's still pending in `llm_qualification_projects` (FineWeb prep was going to be Marvin-with-Cursor). Sequencing: GPT-2 first, parallel, or after Stage 1?
 
 ## Decided
-- **Two tracks on the same data/tasks/verifier (19 Sep):** Track A = fine-tune a Qwen-class VLM (portfolio credential, priority); Track B = "local", Marvin's own from-scratch vision model with native N-channel input, command tokens, optional 64x64 pointing output (control + measurement instrument). Details: `PLAN.md`.
+- **Two tracks on the same data/tasks/verifier (19 Sep):** Track A = fine-tune a Qwen-class VLM (portfolio credential, priority); Track B = "local", Marvin's own from-scratch vision model with native N-channel input, command tokens, optional 64x64 pointing output (control + measurement instrument). Details: `docs/archive/PLAN.md`.
 - **P0 redefined (19 Sep):** the world as aligned, very simple raster layers (3-5 widely spaced classes each); first skill = relating the same place across layers. For Track A three layers are packed into RGB with a legend; later the model chooses which layers to view.
 - **No further derived layers for now (19 Sep):** the 7 raw layers are enough to start; shadow / sidewalk width parked.
 - **First task = T0 "point read"** (surface or noise class at a given point), then cross-layer point, area/mask, paths. Baseline the untrained model before any training. (19 Sep.)
 - **Authorship (f) settled (19 Sep):** local model and all model/training code typed by Marvin, the local model only in sessions he leads line by line; data/task generators and eval infra collaborative with review.
 - **(j) World substrate = real-city frozen snapshots**, not procedural worlds. Tools and verifiers read the same local datastore; "synthetic" = rendered images + generated tasks. (11 Sep, after survey: `survey/SURVEY_2026-09-11.md`.)
 - **(k) Cities = Amsterdam first, then Barcelona, plus a Paris district and Vienna.** London and New York dropped (OS licensing; no noise map / no open licence). (11 Sep.)
-- **(l) Licensing posture: decided (Oct 2026): code and weights MIT; the evaluation bundle's Amsterdam label stacks ODbL 1.0 with OSM attribution (DATA_LICENSES.md).
+- **(l) Licensing posture (decided Oct 2026):** code and weights MIT; the evaluation bundle's Amsterdam label stacks ODbL 1.0 with OSM attribution (DATA_LICENSES.md).
+- **(h) Repository name and public timing (decided 27 Sep 2026):** public on GitHub as `Marvel4U/spatial-reasoning-from-scratch` since 27 Sep 2026 with rungs c0–c4; later work (wave search, Qwen track) is added to the same repository as it is finished.
 - **Opening hours deferred** as a task layer; stick to layers that are easy in the task stack (heights/shadow, noise, transit, sidewalks, POIs). (11 Sep.)
 - **Paper mode:** no cover-to-cover reading; Marvin skims, we discuss implications together. Reading list: `survey/KEY_PAPERS.md`. (11 Sep.)
 - **PERIA (Jun 2026) is a reproduction/branch-off candidate**; investigation in progress (`survey/raw/05_...`). (11 Sep.)

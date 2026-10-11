@@ -11,7 +11,7 @@ SCHEMA_VERSION = 1
 RESULTS_PATH = config.RESULTS_PATH
 
 
-# ── E1 patch sweep (LEARNING_REPORT §3.5) ─────────────────────────────────
+# ── E1 patch sweep (docs/archive/LEARNING_REPORT.md §3.5) ─────────────────────────────────
 # P=4 → s=1 (no in-patch ambiguity). P=16 → s=4 (blob regime).
 # batch_size: lower P → more tokens (P=4 → N=4096); tune if OOM on 3060.
 

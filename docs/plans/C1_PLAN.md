@@ -1,6 +1,6 @@
 # C1_PLAN — task-conditioned masks on the grid head
 
-Written 21 Sep 2026 after closing c0. Status: **L5a/L5b implemented and run** (21 Sep 2026); L5c/E1-on-c1 open. See `LEARNING_REPORT.md` §3.9–3.10. It explains and specifies; the choices in §12 are Marvin's. Builds on `LOCAL_MODEL_GUIDE.md` (§6, §7c, §13), `LOCAL_EXPERIMENTS.md` (D6, E6, rung c1) and the c0 results in `LEARNING_REPORT.md` §3.5–3.8. Numbers in §3–§4 were measured on 400 training crops of `crops/v2` (script: `docs/plans/perf_prototypes/c1_target_stats.py`).
+Written 21 Sep 2026 after closing c0. Status: **L5a/L5b implemented and run** (21 Sep 2026); L5c/E1-on-c1 open. See `docs/archive/LEARNING_REPORT.md` §3.9–3.10. It explains and specifies; the choices in §12 are Marvin's. Builds on `LOCAL_MODEL_GUIDE.md` (§6, §7c, §13), `docs/archive/LOCAL_EXPERIMENTS.md` (D6, E6, rung c1) and the c0 results in `docs/archive/LEARNING_REPORT.md` §3.5–3.8. Numbers in §3–§4 were measured on 400 training crops of `crops/v2` (script: `docs/plans/perf_prototypes/c1_target_stats.py`).
 
 ## 1. What c1 is, and what it is for
 
@@ -163,4 +163,4 @@ L5a first: it isolates "masks work" from "conditioning works", the same separati
 | `harness/diagnostics/groups.py` | `task_emb` group | Marvin's module; one entry |
 | `analysis/` | mask task adapter, error map | collaborative |
 | `harness/config.py`, `experiments.py` | `task_rung = "c1"`, task list, weights table, experiments L5a / L5b | Marvin |
-| `LOCAL_EXPERIMENTS.md` | record the decisions of §12 when taken | |
+| `docs/archive/LOCAL_EXPERIMENTS.md` | record the decisions of §12 when taken | |

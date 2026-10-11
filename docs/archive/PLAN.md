@@ -1,5 +1,7 @@
 # PLAN — current working plan (set 19 Sep 2026)
 
+*Historical document from 19–20 Sep 2026; kept as the project's trail. It was the working plan when the project switched to aligned raster layers and two model tracks. Superseded by `README.md` (what was built and found) and by the rung plans `docs/plans/C1_PLAN.md` to `docs/plans/C5_PLAN.md`; the Track A (Qwen) plan is `docs/plans/TRACK_A_QWEN_PLAN_2026-10-04.md`. Links to `DESIGN.md` refer to a planning document that is not part of this repository.*
+
 This file is the live plan. It supersedes the *starting point* of `DESIGN.md` (the P0–P3 ladder and stage structure there remain the long-range frame; what changed is how P0 is defined and that there are now two model tracks). History of how we got here: `survey/SURVEY_2026-09-11.md`, `PILOT_de_pijp_2026-09-12.md`.
 
 ## The idea in one paragraph
