@@ -1,0 +1,110 @@
+{
+ "de_pijp/c5_os_bld_det_L4_64k_g128_store100k": {
+  "chain_cells": 15095,
+  "touching_building": 218,
+  "share_pooled": 0.0144,
+  "share_mean_per_route": 0.0102,
+  "raw_solved": 178,
+  "raw_crosses": 55,
+  "moved_solved": 192,
+  "rescued_from_crosses": 14,
+  "raw_solved_share": 0.356,
+  "moved_solved_share": 0.384
+ },
+ "de_pijp/c5_r5_wave_nat3_tok01_ownp50_from48k_L4_16k_g128_store100k": {
+  "chain_cells": 31312,
+  "touching_building": 52,
+  "share_pooled": 0.0017,
+  "share_mean_per_route": 0.0021,
+  "raw_solved": 375,
+  "raw_crosses": 16,
+  "moved_solved": 377,
+  "rescued_from_crosses": 2,
+  "raw_solved_share": 0.75,
+  "moved_solved_share": 0.754
+ },
+ "de_pijp/c5_r5_wave_nat3_tok01_cleanup100_dw3_ownp50_r2_L4_16k_g128_store100k": {
+  "chain_cells": 32169,
+  "touching_building": 478,
+  "share_pooled": 0.0149,
+  "share_mean_per_route": 0.015,
+  "raw_solved": 215,
+  "raw_crosses": 186,
+  "moved_solved": 228,
+  "rescued_from_crosses": 13,
+  "raw_solved_share": 0.43,
+  "moved_solved_share": 0.456
+ },
+ "zuid_centrum/c5_os_bld_det_L4_64k_g128_store100k": {
+  "chain_cells": 8783,
+  "touching_building": 67,
+  "share_pooled": 0.0076,
+  "share_mean_per_route": 0.0072,
+  "raw_solved": 150,
+  "raw_crosses": 25,
+  "moved_solved": 160,
+  "rescued_from_crosses": 10,
+  "raw_solved_share": 0.3,
+  "moved_solved_share": 0.32
+ },
+ "zuid_centrum/c5_r5_wave_nat3_tok01_ownp50_from48k_L4_16k_g128_store100k": {
+  "chain_cells": 20732,
+  "touching_building": 251,
+  "share_pooled": 0.0121,
+  "share_mean_per_route": 0.0124,
+  "raw_solved": 279,
+  "raw_crosses": 37,
+  "moved_solved": 288,
+  "rescued_from_crosses": 9,
+  "raw_solved_share": 0.558,
+  "moved_solved_share": 0.576
+ },
+ "zuid_centrum/c5_r5_wave_nat3_tok01_cleanup100_dw3_ownp50_r2_L4_16k_g128_store100k": {
+  "chain_cells": 20060,
+  "touching_building": 603,
+  "share_pooled": 0.0301,
+  "share_mean_per_route": 0.0316,
+  "raw_solved": 183,
+  "raw_crosses": 134,
+  "moved_solved": 203,
+  "rescued_from_crosses": 20,
+  "raw_solved_share": 0.366,
+  "moved_solved_share": 0.406
+ },
+ "maze/c5_os_bld_det_L4_64k_g128_store100k": {
+  "chain_cells": 3012,
+  "touching_building": 18,
+  "share_pooled": 0.006,
+  "share_mean_per_route": 0.0056,
+  "raw_solved": 81,
+  "raw_crosses": 8,
+  "moved_solved": 82,
+  "rescued_from_crosses": 1,
+  "raw_solved_share": 0.162,
+  "moved_solved_share": 0.164
+ },
+ "maze/c5_r5_wave_nat3_tok01_ownp50_from48k_L4_16k_g128_store100k": {
+  "chain_cells": 13224,
+  "touching_building": 296,
+  "share_pooled": 0.0224,
+  "share_mean_per_route": 0.0199,
+  "raw_solved": 205,
+  "raw_crosses": 81,
+  "moved_solved": 216,
+  "rescued_from_crosses": 11,
+  "raw_solved_share": 0.41,
+  "moved_solved_share": 0.432
+ },
+ "maze/c5_r5_wave_nat3_tok01_cleanup100_dw3_ownp50_r2_L4_16k_g128_store100k": {
+  "chain_cells": 12691,
+  "touching_building": 510,
+  "share_pooled": 0.0402,
+  "share_mean_per_route": 0.0376,
+  "raw_solved": 148,
+  "raw_crosses": 130,
+  "moved_solved": 154,
+  "rescued_from_crosses": 6,
+  "raw_solved_share": 0.296,
+  "moved_solved_share": 0.308
+ }
+}

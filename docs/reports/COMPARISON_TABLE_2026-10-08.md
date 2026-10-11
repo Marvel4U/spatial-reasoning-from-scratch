@@ -80,9 +80,9 @@ prediction file with today's scorer and matches its source file exactly.
 
 What the mix says:
 
-1. **Two families, two failure modes.** Qwen always produces a parseable line with roughly the right ends after
-   fine-tuning, and fails on **geometry**: its largest bucket stays "crosses a building" (36–47 %) at every data
-   size. The grid models never miss an endpoint (the markers are an input plane and the chain starts at them) and
+1. **Two families, two failure modes.** After fine-tuning Qwen always produces a parseable line and misses an
+   endpoint on 11 % of routes; it fails on **geometry**: its largest bucket stays "crosses a building" (36–47 %) at every data
+   size. The grid models cannot miss an endpoint under this conversion (the chain starts at the markers) and
    rarely cross; they fail by **not connecting**. When the wave search connects, the line is almost always valid
    (382 of the 395 connected routes solve).
 2. **The wave search's lead holds under the polyline rule**: 76.4 % vs 49.6 % for the best Qwen and 37.4 % for the
@@ -121,18 +121,21 @@ Reading:
 - The one-shot model loses 8.6 points on De Pijp: it was trained on the geometric shortest path, which runs along
   walls, so its chain cells are often part building.
 - The cleanup network loses 24 points. 1.5 % of its chain cells contain a building pixel, against 0.2 % for the
-  plain wave (0.010 for the one-shot). A likely cause: the cleanup targets are the network's own shortest chain,
+  plain wave and 1.4 % for the one-shot model (per-route means 1.5 / 0.2 / 1.0 %; recomputed 11 Oct from the saved
+  drawings by `harness/diagnostics/chain_building_share.py`, `COMPARISON_CHAIN_BUILDING_2026-10-11.json`). A likely cause: the cleanup targets are the network's own shortest chain,
   accepted under the cell rule, which lets a chain cut through cells that are part building; the shortest chain
   hugs the inside of every corner, and training on those targets teaches lines that hug buildings. This is an
   inference from the numbers, not tested.
 
 **Conversion artifact (sensitivity).** A 2 m cell centre sits on a pixel corner, and the scorer's floor() puts it
-in the cell's lower-right pixel. Upper bound of that effect: move every raw chain point to a free pixel of its own
-cell, if the cell has one, and re-score. Of the raw "crosses a building" failures this rescues, on De Pijp,
-4 / 16 for the wave search, 26 / 55 for the one-shot model and 33 / 186 for the cleanup network (Zuid: 8 / 37, 11 / 25,
-27 / 134; maze: 19 / 81, 4 / 8, 16 / 130). The DP simplification already recovers part of this (raw → DP: wave
-75.0 → 76.4 %, one-shot 35.6 → 37.4 %). So the one-shot number could be up to ~3 points higher with a friendlier
-conversion. The cleanup network's crossings are mostly real, and nothing changes the order of the table.
+in the cell's lower-right pixel. Sensitivity (recomputed 11 Oct with the same script, same JSON): every raw chain point whose scored pixel is
+building is moved to the first free pixel of its own cell, if the cell has one, and the raw chain is re-scored. Of the
+raw "crosses a building" failures this rescues, on De Pijp, 2 / 16 for the wave search, 14 / 55 for the one-shot
+model and 13 / 186 for the cleanup network (Zuid: 9 / 37, 10 / 25, 20 / 134; maze: 11 / 81, 1 / 8, 6 / 130). This is
+one fixed choice of pixel, not an optimum over choices; the counts first given here (26 / 55 for the one-shot model)
+came from a variant that was not saved and could not be reproduced. The DP simplification already recovers part of
+this (raw → DP: wave 75.0 → 76.4 %, one-shot 35.6 → 37.4 %). With the moved points the one-shot raw chain scores
+38.4 % (+2.8 points, 1 point above its DP headline). The cleanup network's crossings are mostly real, and nothing changes the order of the table.
 
 ## 5. What can and cannot be claimed
 
