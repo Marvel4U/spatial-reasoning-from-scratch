@@ -52,6 +52,10 @@ The comparison is controlled at the routes and scoring rule, not at the input in
 
 The project starts from public map layers of Amsterdam at one metre per pixel: buildings, surfaces, road noise, places, and derived sunlit hours. Tasks add marker planes and two condition tokens; every target is computed exactly from the underlying spatial data ([report, Section 3](PAPER.md#3-every-task-has-an-exact-answer-computed-from-public-map-layers)).
 
+<img src="docs/figures/F5_pipeline.png" width="100%" alt="The public map layers of De Pijp, Amsterdam, the class tile they are combined into, one 256 m crop as the model sees it, and three exact targets computed from it">
+
+*The data. Top: the public layers of De Pijp, Amsterdam (3DBAG buildings, BGT surfaces, the 2021 noise map, OpenStreetMap and Overture places, derived sunlit hours) and the class tile they are combined into. Bottom: one 256 m crop as the model sees it, with a marker, and three of the exact targets computed from it: sidewalk, within 100 m of the marker, food & drink within 100 m.*
+
 A 5–9 M-parameter transformer is trained from scratch through a seven-level ladder:
 
 1. read one layer;
