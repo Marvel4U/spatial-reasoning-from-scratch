@@ -18,8 +18,8 @@ length ≤ **1.10×** teacher walking length. Failure reasons: unparseable, wron
 long. Straight-line join of markers on De Pijp val scores **27.6%** (floor); teacher **100%** (ceiling).
 
 **Comparison note:** Our wave search (C5) uses a **cell connectivity** rule on a scratchpad (~**78%** De Pijp val 500
-after own-drawings fine-tune). Wave has **not** yet been rescored with this polyline rule for a single table (plan §5,
-still open).
+after own-drawings fine-tune). Wave has since been rescored with this polyline rule in one table (76.4%):
+[`COMPARISON_TABLE_2026-10-08.md`](COMPARISON_TABLE_2026-10-08.md).
 
 ---
 
@@ -46,7 +46,7 @@ Artifacts: `runs/qwen_vanilla/eval_ab_n200.json`, `eval_ab_4b_n200.json`, preds 
    endpoints on two-pass). Output is often parseable JSON; the model does not reliably map discs to the 0–1000 grid.
 
 2. **4B is a different regime** — ~**10×** two-pass solve rate vs 2B on the same 200 routes. Failures shift to
-   **geometry**: ~**half** of errors are **chord through buildings** (straight-ish polylines with few vertices). Oracle
+   **geometry**: **chords through buildings** on ~**half** of all routes (51.5%), ~two thirds of the failures (103/151) (straight-ish polylines with few vertices). Oracle
    helps endpoints but **does not** fix crosses — the model "sees" the task but not obstacle-aware planning.
 
 3. **Matches plan expectations** (§2): straight/detour split; zero-shot near the **straight-line floor (~28%)** on
@@ -126,10 +126,10 @@ not the headline.
 
 ### 3.4 What fine-tuning taught us
 
-1. **SFT works** — Monotonic improvement with data on val 500: ~**+10 pts** per ~2× data in the 1k→5k→full band;
+1. **SFT works** — Monotonic improvement with data on val 500: about **+4 pts** per doubling of data from 1k to 5k and **+9.5 pts** per doubling from 5k to full;
    **~50%** at full train vs **~2.5%** vanilla 2B.
 
-2. **Data beats width (here)** — Full-train **2B+LoRA (~50% val 500)** beats **4B vanilla (~27% on val 200)** for
+2. **Data beats width (here)** — Full-train **2B+LoRA (~50% val 500; 64.5% on the first 200)** beats **4B vanilla (24.5% two-pass on val 200; 27% is the oracle mode)** for
    this prompt and scorer.
 
 3. **Hard routes need data** — **6+ goals:** 1.2% (1k) → 7.7% (5k) → **28.3%** (full) on val 500. Easy bands saturate
@@ -142,8 +142,8 @@ not the headline.
 5. **Engineering** — Smoke test before LoRA; sidecar adapters; resume for ~15k-step overnight on 3060 (~5–18 h
    depending on N); eval separated from HF training loop. **`trl` not yet run** (plan step 4).
 
-6. **Honest gaps** — No F3–F6 (vision LoRA, layers render, 1024 px, transfer). No GRPO yet. Wave not on polyline
-   scorer in one table.
+6. **Honest gaps** — No F3–F6 (vision LoRA, layers render, 1024 px, transfer). No GRPO yet. Wave since on the polyline
+   scorer in one table (`COMPARISON_TABLE_2026-10-08.md`).
 
 ---
 
@@ -154,7 +154,7 @@ solved_share
   50% |                                    *  (~19.3k LoRA)
   40% |
   30% |                         *
-  20% |              *    * (1k)     (~27% 4B vanilla, 200 only)
+  20% |              *    * (1k)     (~24.5% 4B vanilla, 200 only)
   10% |
    0% | * (2B vanilla ~2.5%, 200 only)
       +-----|-----|-----|-----|-----|
