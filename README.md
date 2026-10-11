@@ -26,11 +26,11 @@ What this is **not**: no reinforcement learning, one city. The vision-language m
 
 ## 2 Related work: the closest line is coordinate-level route tracing on map images, and it lacks exact targets, a validity rule and a difficulty axis
 
-Map questions for vision-language models come in two forms. MapBench [1] poses 1,649 queries on 100 illustrated tourist maps with start and goal as landmark names and expects route directions in language; ground truth is a shortest path on a hand-built scene graph, the metric the ratio of the described path's length to the optimum, and it evaluates existing models (Llama-3.2-11B-Vision, Qwen2-VL-7B, GPT-4o) without training anything. MapTrace [16] is the pixel-level version and the closest relative of Sections 6 and 7: a map image and start/goal coordinates in, an ordered list of coordinates on walkable pixels out, which is the output form of our fine-tuned VLM. Its data are synthetic: an LLM describes maps in twelve categories, an image model renders them, k-means colour clustering guesses the walkable mask, Dijkstra on the pixel graph gives a path, and two LLM critics filter the result, 23k paths on 4k maps. On that data they fine-tune Gemma3-27B (LoRA rank 8) and Gemini 2.5 Flash and evaluate on MapBench's maps with two metrics: NDTW, the dynamic-time-warping distance between predicted and annotated coordinates after normalising by map size (lower is better), and a "success rate" that counts parseable outputs. Fine-tuning moves Gemma from 1.29 to 1.13 NDTW and 88 to 95 % parseable, Flash from 1.29 to 0.87. Their own quality numbers: critic accuracy 76–83 %, human agreement on sample quality κ = 0.36; the largest failure class in their worst predictions is a detour into non-traversable ground (26 %).
+Map questions for vision-language models come in two forms. MapBench [1] poses 1,649 queries on 100 illustrated tourist maps with start and goal as landmark names and expects route directions in language; ground truth is a shortest path on a hand-built scene graph, the metric the ratio of the described path's length to the optimum, and it evaluates existing models (Llama-3.2-11B-Vision, Qwen2-VL-7B, GPT-4o) without training anything. MapTrace [2] is the pixel-level version and the closest relative of Sections 6 and 7: a map image and start/goal coordinates in, an ordered list of coordinates on walkable pixels out, which is the output form of our fine-tuned VLM. Its data are synthetic: an LLM describes maps in twelve categories, an image model renders them, k-means colour clustering guesses the walkable mask, Dijkstra on the pixel graph gives a path, and two LLM critics filter the result, 23k paths on 4k maps. On that data they fine-tune Gemma3-27B (LoRA rank 8) and Gemini 2.5 Flash and evaluate on MapBench's maps with two metrics: NDTW, the dynamic-time-warping distance between predicted and annotated coordinates after normalising by map size (lower is better), and a "success rate" that counts parseable outputs. Fine-tuning moves Gemma from 1.29 to 1.13 NDTW and 88 to 95 % parseable, Flash from 1.29 to 0.87. Their own quality numbers: critic accuracy 76–83 %, human agreement on sample quality κ = 0.36; the largest failure class in their worst predictions is a detour into non-traversable ground (26 %).
 
 Against that line this work differs in five ways. (i) Targets are exact: routes are computed on vector data, so a prediction is right or wrong, where a quarter of MapTrace's paths fail its own critic. (ii) The rule measures validity, not similarity: endpoints, no building crossed, length within 1.10 × of the walking path (Table 2); NDTW can reward a line through a building, and the building crossing is exactly the failure that dominates both their worst cases and our fine-tuned VLM's (Table 6). (iii) Results are reported against difficulty: neither paper breaks results down by path length or number of turns, and the length curve is the whole story of Sections 5 and 7. (iv) Scale: they work at 27B and Gemini; here a 2B VLM reaches 50 % and a 9 M-parameter network with iteration 76 % under one rule, though a larger one-shot VLM was not run and the scale axis is open. (v) What they have and this work lacks is visual diversity: illustrated maps with icons and legends in twelve styles against one city rendered in one clean way. Half of their problem is reading the map; this work isolates the other half, the geometry.
 
-The search of Section 5 has its precedents elsewhere: looped networks that extrapolate to longer problems (Deep Thinking [9, 10]), neural algorithmic reasoning with dense hints [11], and transformers that imitate A* search traces on mazes (Searchformer and successors), which emit the search as text tokens where ours draws it on a scratchpad; training on the network's own drawings is the scheduled-sampling / DAgger idea [12, 13] applied to a scratchpad. The Part-I findings connect to Swin's relative position bias [4], point prompts as tokens [5], shortcut learning [6], attention sinks [7] and task grouping [8]. The full related-work section, with every reference verified and a placing of these results against what each line has shown to work and not to work, is `docs/RELATED_WORK.md`.
+The search of Section 5 has its precedents elsewhere: looped networks that extrapolate to longer problems (Deep Thinking [3, 4]), neural algorithmic reasoning with dense hints [5], and transformers that imitate A* search traces on mazes (Searchformer [6] and successors), which emit the search as text tokens where ours draws it on a scratchpad; training on the network's own drawings is the scheduled-sampling / DAgger idea [7, 8] applied to a scratchpad. The Part-I findings connect to Swin's relative position bias [9], point prompts as tokens [10], shortcut learning [11], attention sinks [12] and task grouping [13]. The full related-work section, with every reference verified and a placing of these results against what each line has shown to work and not to work, is `docs/RELATED_WORK.md`; it also covers map benchmarks in text and multiple-choice form (MapEval [14], MapQA [15]) and reinforcement learning on transit maps (RewardMap [16]).
 
 ## 3 Every task has an exact answer computed from public map layers
 
@@ -163,7 +163,7 @@ More animations, one frame per pass (chosen best cases): [De Pijp, 424 m](docs/f
 
 ## 6 A pretrained vision-language model solves the task only after fine-tuning
 
-This section asks how far a pretrained vision-language model gets on the same routes, without training and with LoRA fine-tuning on a growing number of routes. The work and its report are Marvin's (`qwen_reference/`, `qwen_fine_tuning/`, `docs/reports/TRACK_A_QWEN_VANILLA_AND_SFT_2026-10-08.md`, cited below as "Track A report §").
+This section asks how far a pretrained vision-language model (Qwen3-VL [17]) gets on the same routes, without training and with LoRA [18] fine-tuning on a growing number of routes. The work and its report are Marvin's (`qwen_reference/`, `qwen_fine_tuning/`, `docs/reports/TRACK_A_QWEN_VANILLA_AND_SFT_2026-10-08.md`, cited below as "Track A report §").
 
 ### 6.1 The model answers with a polyline in its grounding grid and is fine-tuned with an own LoRA loop
 
@@ -341,20 +341,21 @@ Code is MIT-licensed (`LICENSE`); data sources and their licences are in `DATA_L
 
 Full discussion of the related work: [`docs/RELATED_WORK.md`](docs/RELATED_WORK.md).
 
-1. Dihan, M. L. et al. (2025). MapEval: a map-based evaluation of geo-spatial reasoning in foundation models. ICML 2025. arXiv:2501.00316.
-2. MapQA: a question-answering benchmark on map images (full citation in `docs/RELATED_WORK.md`).
-3. RewardMap: reinforcement learning for fine-grained visual reasoning on transit maps (full citation in `docs/RELATED_WORK.md`).
-4. Liu, Z. et al. (2021). Swin Transformer: hierarchical vision transformer using shifted windows. ICCV 2021.
-5. Kirillov, A. et al. (2023). Segment Anything. ICCV 2023.
-6. Geirhos, R. et al. (2020). Shortcut learning in deep neural networks. Nature Machine Intelligence 2, 665–673.
-7. Xiao, G. et al. (2023). Efficient streaming language models with attention sinks. arXiv:2309.17453 (ICLR 2024).
-8. Standley, T. et al. (2020). Which tasks should be learned together in multi-task learning? ICML 2020.
-9. Schwarzschild, A. et al. (2021). Can you learn an algorithm? Generalizing from easy to hard problems with recurrent networks. NeurIPS 2021.
-10. Bansal, A. et al. (2022). End-to-end algorithm synthesis with recurrent networks: logical extrapolation without overthinking. NeurIPS 2022.
-11. Veličković, P. and Blundell, C. (2021). Neural algorithmic reasoning. Patterns 2(7).
-12. Bengio, S. et al. (2015). Scheduled sampling for sequence prediction with recurrent neural networks. NeurIPS 2015.
-13. Ross, S., Gordon, G. and Bagnell, J. A. (2011). A reduction of imitation learning and structured prediction to no-regret online learning. AISTATS 2011.
-14. Qwen Team (2025). Qwen3-VL. Model release and technical documentation, Alibaba.
-15. Hu, E. J. et al. (2021). LoRA: low-rank adaptation of large language models. arXiv:2106.09685 (ICLR 2022).
-
-[16] Pantazopoulos et al., MapTrace: Scalable Data Generation for Route Tracing on Maps, arXiv:2512.19609 (2025).
+1. Xing, S. et al. (2025). Can large vision language models read maps like a human? (MapBench). arXiv:2503.14607.
+2. Panagopoulou, A. et al. (2025). MapTrace: scalable data generation for route tracing on maps. arXiv:2512.19609.
+3. Schwarzschild, A. et al. (2021). Can you learn an algorithm? Generalizing from easy to hard problems with recurrent networks. NeurIPS 2021. arXiv:2106.04537.
+4. Bansal, A. et al. (2022). End-to-end algorithm synthesis with recurrent networks: extrapolation without overthinking. NeurIPS 2022. arXiv:2202.05826.
+5. Veličković, P. and Blundell, C. (2021). Neural algorithmic reasoning. Patterns 2(7). arXiv:2105.02761.
+6. Lehnert, L. et al. (2024). Beyond A*: better planning with transformers via search dynamics bootstrapping (Searchformer). arXiv:2402.14083.
+7. Bengio, S. et al. (2015). Scheduled sampling for sequence prediction with recurrent neural networks. NeurIPS 2015. arXiv:1506.03099.
+8. Ross, S., Gordon, G. J. and Bagnell, J. A. (2011). A reduction of imitation learning and structured prediction to no-regret online learning (DAgger). AISTATS 2011. arXiv:1011.0686.
+9. Liu, Z. et al. (2021). Swin Transformer: hierarchical vision transformer using shifted windows. ICCV 2021. arXiv:2103.14030.
+10. Kirillov, A. et al. (2023). Segment Anything. ICCV 2023. arXiv:2304.02643.
+11. Geirhos, R. et al. (2020). Shortcut learning in deep neural networks. Nature Machine Intelligence 2. arXiv:2004.07780.
+12. Xiao, G. et al. (2024). Efficient streaming language models with attention sinks. ICLR 2024. arXiv:2309.17453.
+13. Standley, T. et al. (2020). Which tasks should be learned together in multi-task learning? ICML 2020. arXiv:1905.07553.
+14. Dihan, M. L. et al. (2025). MapEval: a map-based evaluation of geo-spatial reasoning in foundation models. ICML 2025. arXiv:2501.00316.
+15. Li, Z. et al. (2025). MapQA: open-domain geospatial question answering on map data. ACM SIGSPATIAL 2025. arXiv:2503.07871.
+16. Feng, S. et al. (2026). RewardMap: tackling sparse rewards in fine-grained visual reasoning via multi-stage reinforcement learning. ICLR 2026. arXiv:2510.02240.
+17. Qwen Team (Bai, S. et al.) (2025). Qwen3-VL technical report. arXiv:2511.21631.
+18. Hu, E. J. et al. (2022). LoRA: low-rank adaptation of large language models. ICLR 2022. arXiv:2106.09685.
