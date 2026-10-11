@@ -176,11 +176,12 @@ most of the difference between 75 % and 64 %:
 | De Pijp val, all | 500 | **64.0 %** | 87 % (112) | 71 % (141) | 50 % (247) | 93.2 % | 68.0 % | 0.99 / 0.91 / 0.87 / 0.74 / 0.74 / 0.75 |
 | De Pijp test | 500 | **61.0 %** | 89 % (122) | 71 % (168) | 37 % (210) | 82.8 % | 58.6 % | 0.98 / 0.84 / 0.82 / 0.66 / 0.68 / 0.69 |
 | Zuid + Centrum val (never seen) | 500 | **44.2 %** | 79 % (132) | 48 % (163) | 19 % (205) | 75.0 % | 53.8 % | 0.96 / 0.79 / 0.76 / 0.59 / 0.60 / 0.61 |
-| Zuid + Centrum test (never seen) | 500 | **53.2 %** | 83 % (102) | 57 % (192) | 34 % (206) | 88.6 % | 59.8 % | 0.97 / 0.86 / 0.84 / 0.66 / 0.63 / 0.64 |
+| Zuid + Centrum test (33 of the 500 windows overlap De Pijp; 52.7 % on the other 467) | 500 | **53.2 %** | 83 % (102) | 57 % (192) | 34 % (206) | 88.6 % | 59.8 % | 0.97 / 0.86 / 0.84 / 0.66 / 0.63 / 0.64 |
 
-The new map costs 4–8 points on the short routes and 15–30 on the long ones against the same split of De Pijp; the
-backward passes lose the most (0.59–0.66 against 0.74 IoU within 4 m). The network carries the algorithm to ground it
-has never seen, with a loss that grows with the number of passes. The two new-map splits differ by 9 points at equal
+Against the same split of De Pijp the new map costs 5–8 points on the short routes, 14–23 on the middle ones, and on
+the long ones 31 points on val but only 2 on test; the backward passes lose the most (0.59–0.66 against 0.74 IoU
+within 4 m). The network carries the algorithm to ground it has never seen, with a loss that grows with the number of
+passes on val. The two new-map splits differ by 9 points at equal
 length mix, which gives an idea of the spread between 500-route sets.
 
 **Depth decides the loop.** The same recipe at 2 blocks is a few points below the 4-block model teacher-forced on the forward passes (§4.1) and solves 4 % free-running. Teacher-forced numbers do not predict rollout success here.
@@ -231,8 +232,8 @@ applied afterwards; the first forward pass (start disc) is never replaced; valid
 (`runs/diagnostics/c5_r5_wave_nat3_tok01_ownp50_from48k_L4_16k_g128_store100k/wave_rollout_eval_{val500,test,zuid_centrum_c4_256_val_val}.json`,
 the same for `..._banneal5_noisep1_ownp50_L4_48k_...`, and their `eval.jsonl`.)
 
-The teacher-forced numbers do not move; the whole gain is in the loop, +11 to +16 points, largest on long routes and
-on the never-seen map. Training clean first and repairing afterwards (a) beats mixing the noise into the main
+The teacher-forced numbers do not move; the whole gain is in the loop, +12 to +15 points, most on routes of 4 fronts and
+more, and most of all on the long routes of the never-seen map. Training clean first and repairing afterwards (a) beats mixing the noise into the main
 learning phase (b) by 3–5 points at a third of the compute. The final drawings carry more leftover cells (585
 against 339), which the success rule does not penalise; the second round (store regenerated from (a), continued
 again) is queued to repair the current network's own mistakes. Best checkpoint as of 4 Oct:
@@ -264,18 +265,19 @@ lit cells, 3 cells wide, when that chain is a success by the rule, else the teac
 `config.c5_wave_cleanup`); the lit-cell weight of the draw pass lowered from about 7.5 to penalise painting
 (`config.c5_wave_fg_weight_override`). Continued from the natural-noise networks for 16k steps, draw share 1/3.
 "Clean" = at most 1.25× the cells of the thin chain. (`..._cleanup100_dw1_...` / `..._cleanup100_dw3_...` runs,
-`wave_rollout_eval_val500.json`, `..._zuid_centrum_...`, `..._maze_...`.)
+`wave_rollout_eval_val500.json`, `..._zuid_centrum_...`, `..._maze_...`; the clean shares before cleanup are from
+`wave_rollout_eval_pl.json` of the natural-noise network, the same 500 routes on GPU: 6.8 % and 6.8 %.)
 
 | 256 m, De Pijp val | before cleanup | draw weight 1.0 | draw weight 3 |
 |---|---:|---:|---:|
 | solved | 78 % | 58 % | 70 % |
 | solved, never-seen district / house maze | 60 % / 51 % | 42 % / 47 % | 52 % / 42 % |
 | lit cells on the final drawing | 585 | 365 | 441 |
-| clean final drawings | 14 % | — | 42 % |
-| solved and clean | 14 % | — | 38 % |
+| clean final drawings | 7 % | — | 42 % |
+| solved and clean | 7 % | — | 38 % |
 
 Weight 1.0 thins the line but breaks it (under the teacher's schedule 74 % of routes are solved before the draw pass
-and 56 % after). Weight 3 keeps most of the success and triples the clean share: a trade of 8 points of success for
+and 56 % after). Weight 3 keeps most of the success and raises the clean share from 7 % to 42 %: a trade of 7 points of success for
 cleanliness, not a free improvement. At 512 m the same recipe (weight 3, own round-2 drawings, 61 % own chains in the
 store) fails: 18 % solved against 42 % before, 30 % of routes finishing with DONE (`..._cleanup100_dw3_ownp50_r2_L4_16k_g256_b64_zc512`).
 The cleanup pass is therefore reported as a result at 256 m and a negative result at 512 m; the 512 m network of
@@ -283,8 +285,9 @@ record stays the natural-noise one.
 
 ### 4.9 The one-shot baseline, budget-matched (6 Oct)
 
-The same 4-block network with no scratchpad, trained to draw the path in one forward pass (the c4 recipe: half
-building, half detour, CE + Dice), scored by exactly the search's rule on the same routes
+The search network's 4-block trunk without the readout token and state head (8,840,240 parameters; the 17-channel
+input keeps the scratchpad plane, which stays empty), trained to draw the path on 2 m cells in one forward pass (the
+c4 recipe: half building, half detour, CE + Dice), scored by exactly the search's rule on the same routes
 (`harness/diagnostics/oneshot_route_eval.py`; runs `c5_os_bld_det_L4_64k_g128_store100k` = 64k steps on the 100k De
 Pijp routes, the search's total budget; `c5_os_bld_det_from64k_L4_32k_g256_b64_zc512` = continued at 512 m for 32k).
 
@@ -297,8 +300,11 @@ Pijp routes, the search's total budget; `c5_os_bld_det_from64k_L4_32k_g256_b64_z
 | house maze, 512 m | 14 % | **40 %** | 39 / 6 / 0 % | 83 / 63 / 18 % (6–8) |
 
 Four times the training of the earlier one-shot run (16k → 64k steps) did not move it (46 % both). The gap to the
-search grows with route length everywhere, which is the point of the search: a single pass has no more steps to
-spend on a longer route. The one-shot model's length rule is slightly lenient (its teacher is the geometric path,
+search is smallest on the shortest routes everywhere; beyond 4 fronts it stays at 37–38 points on De Pijp and narrows
+on the mazes, where both methods fail on long routes. A single pass has no more steps to spend on a longer route, but
+the one-pass number also depends on the output resolution: the 4 m one-shot network of the c4 report
+(`c4n_bld_det_L4_16k_store100k`, `oneshot_route_eval_val500.json`) scores 64.8 % (91 / 84 / 42 %) on the same 500
+De Pijp routes under a coarser version of the rule (4 m cells, which make it more lenient). The one-shot model's length rule is slightly lenient (its teacher is the geometric path,
 the rule's reference the clearance-priced walking length; `geom_*` in the JSONs differ by about a point).
 
 ## 5. How the recipe was found
@@ -334,7 +340,7 @@ Hypotheses in the order tried, with the verdict [TL §3]:
 
 | # | hypothesis (who) | test | verdict |
 |---|---|---|---|
-| 1 | ties in the teacher's way back (Claude) | family of all cheapest paths per hop | real but small: ~7 false cells per sample, 23 % of the failing run's 167 |
+| 1 | ties in the teacher's way back (Claude) | family of all cheapest paths per hop | real but small: ~7 false cells per sample in the clean reference (59 % of its 12.5); 23 % (~39 cells) of the failing run's 167 |
 | 2 | the hop is not the cheapest way to the front because the wave is priced (Claude) | cheapest front point from the tip | minor: median shift 1 m, cost gap 2.7 % |
 | 3 | the 100k store (Marvin) | arrays compared; rerun on 40k | no |
 | 4 | dropping Dice | backward hop alone, CE recipe | no |
@@ -346,13 +352,17 @@ Hypotheses in the order tried, with the verdict [TL §3]:
 | 10 | confusing "two fronts left" with the origin case | split by fronts on the pad | no |
 | 11 | **the token loss** | the mix with token weight 0 and 0.1 | **yes** |
 
-Counter tests (backward hop, 2 blocks, 8k, 299 validation samples, read at 0.5) [TL §3]:
+Counter tests (backward hop, 2 blocks, 8k, read at 0.5; 299 validation samples except the two rows marked n = 491;
+`runs/diagnostics/<run>/wave_back_ties_wave_back.json`) [TL §3]:
 
 | run | new-cell recall | false cells per sample | consumed front erased |
 |---|---:|---:|---:|
 | reference: alone, CE + Dice, no noise (rerun) | 0.68 (0.65) | 12.5 (13) | 95 % (94 %) |
-| C: alone, CE recipe, noise | 0.88 | 68 | 83 % |
-| E: C + mix with origin, token weight 1.0 | 0.73 | 180 | 54 % |
+| C: alone, CE recipe, noise (`c5_r5_wave_back_ce_noisep1_L2_8k_g128_store40k`, n = 491) | 0.87 | 71 | 80 % |
+| E: C + mix with origin, token weight 1.0 (`c5_r5_wave_bwd2_ce_noisep1_cosine_L2_8k_g128_store40k`, n = 491) | 0.72 | 179 | 52 % |
+
+The memo [TL §3] gives 0.88 / 68 / 83 % for C and 0.73 / 180 / 54 % for E; the files of both runs now hold a
+491-sample evaluation, whose values the table gives. The E rows therefore compare 491 with 299 samples.
 | E, token weight 0.1 | 0.82 | 98 | 74 % |
 | E, token weight 0 | 0.86 | 88 | 77 % |
 
@@ -403,8 +413,8 @@ What the numbers say about the 25 % failures:
 ## 7. Limitations
 
 - **The headline depends on the route mix and the round.** 75 % on the first 200 De Pijp validation routes, 64 % on all 500 (more long routes), 61 % on the 500 test routes for the 48k network; 78 % / 73 % after one round of natural noise (§4.6). The honest single numbers for the training district are 73–78 % after the round, 61–64 % before.
-- **The new map (Zuid + Centrum, never seen):** 44 % on its 500 validation routes, 53 % on its 500 test routes (§4.3). The algorithm transfers; the precision does not fully: 4–8 points lost on short routes, 15–30 on long ones, most of it in the backward passes. The one-shot detour model of the C5 setup (R0) lost 0.16 in dilated IoU on the same map [WS §1].
-- **The maze test fails** (`spatial_data/maze_world.py`: a synthetic district of corridors 8–12 m wide and walls 2–6 m thick in three styles; 500 routes per split; `wave_rollout_eval_maze_v1_c4_256_val_{val,test}.json`): 4 % solved on val, 3 % on test (19 % / 13 % on routes with 2–3 fronts, 0 % beyond). From the first pass the network draws a roughly round ring straight through the walls (first pass IoU within 4 m 0.36 against 0.96–0.99 on the real maps; all later passes 0.17), while the tokens are mostly right (0.82). Corridor class does not matter (controls with roadway and sidewalk ground: 5–6 %), nor do thicker walls (3–6 m: 1 %). So the network has learnt to run the wave around Amsterdam's building blocks, not around thin walls it has never seen: the obstacle rule it learnt is tied to the shapes of the training ground. A fine-tune with maze routes in the mix is the planned next step; whether a network trained on both keeps both is the question that test will answer.
+- **The new map (Zuid + Centrum; its validation windows were never seen in training):** 44 % on its 500 validation routes, 53 % on its 500 test routes, 33 of whose windows overlap De Pijp (52.7 % on the other 467) (§4.3). The algorithm transfers; the precision does not fully: 5–8 points lost on short routes, 31 on long ones on val (2 on test), most of it in the backward passes. The one-shot detour model of the C5 setup (R0) lost 0.16 in dilated IoU on the same map [WS §1].
+- **The maze test fails** (`spatial_data/maze_world.py`: a synthetic district of corridors 8–12 m wide and walls 2–6 m thick in three styles; 200 routes per split; `wave_rollout_eval_maze_v1_c4_256_val_{val,test}.json`): 4 % solved on val, 3 % on test (19 % / 13 % on routes with 2–3 fronts, 0 % beyond on val, 1 of 125 routes with 6+ fronts on test). From the first pass the network draws a roughly round ring straight through the walls (first pass IoU within 4 m 0.35 against 0.96–0.99 on the real maps; all later passes 0.17), while the tokens are mostly right (0.82). Corridor class does not matter (controls with roadway and sidewalk ground: 5–6 %), nor do thicker walls (3–6 m: 1 %). So the network has learnt to run the wave around Amsterdam's building blocks, not around thin walls it has never seen: the obstacle rule it learnt is tied to the shapes of the training ground. A fine-tune with maze routes in the mix is the planned next step; whether a network trained on both keeps both is the question that test will answer.
 - **Single seed** (seed 4) for both 48k runs. The c4 report found a seed spread of 0.013 in IoU for one-shot detours [C4 §7.1]; the seed spread of the rollout success rate is not measured. With 200 routes the binomial standard error at 75 % is about 3 points; per length stratum (63–72 routes) 3–6 points (largest on the 6+ stratum at 54 %).
 - **The token fix is not isolated in the final run.** The 48k L4 recipe was not run with token weight 1.0; how much of the 75 % the fix accounts for is not measured [TL §1].
 - **The success rule** checks the final pad as a set of lit cells, not a single extracted path (§4.3), with a 1.10 length tolerance against the teacher's clearance-priced walking length. Tolerant metrics use 4 m.
